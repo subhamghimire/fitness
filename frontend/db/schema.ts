@@ -1,0 +1,6 @@
+export const CREATE_WORKOUTS_TABLE = `CREATE TABLE IF NOT EXISTS workouts_local (id TEXT PRIMARY KEY NOT NULL, status TEXT NOT NULL DEFAULT 'active', started_at TEXT NOT NULL, ended_at TEXT, last_synced_at TEXT);`;
+export const CREATE_EXERCISES_TABLE = `CREATE TABLE IF NOT EXISTS exercises_local (id TEXT PRIMARY KEY NOT NULL, workout_id TEXT NOT NULL, name TEXT NOT NULL, order_index INTEGER NOT NULL, FOREIGN KEY (workout_id) REFERENCES workouts_local(id) ON DELETE CASCADE);`;
+export const CREATE_SETS_TABLE = `CREATE TABLE IF NOT EXISTS sets_local (id TEXT PRIMARY KEY NOT NULL, exercise_id TEXT NOT NULL, weight REAL, reps INTEGER, rpe INTEGER, is_warmup INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (exercise_id) REFERENCES exercises_local(id) ON DELETE CASCADE);`;
+export const CREATE_INDEXES = `CREATE INDEX IF NOT EXISTS idx_exercises_workout_id ON exercises_local(workout_id); CREATE INDEX IF NOT EXISTS idx_sets_exercise_id ON sets_local(exercise_id); CREATE INDEX IF NOT EXISTS idx_workouts_status ON workouts_local(status);`;
+export const ALL_TABLES_SQL = [CREATE_WORKOUTS_TABLE, CREATE_EXERCISES_TABLE, CREATE_SETS_TABLE, CREATE_INDEXES];
+export const DROP_ALL_TABLES = `DROP TABLE IF EXISTS sets_local; DROP TABLE IF EXISTS exercises_local; DROP TABLE IF EXISTS workouts_local;`;
