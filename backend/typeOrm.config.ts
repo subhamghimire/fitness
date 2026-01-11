@@ -7,8 +7,6 @@ config();
 
 const configService = new ConfigService();
 
-console.log("here");
-
 export const typOrmConfig: DataSourceOptions & SeederOptions = {
   type: "postgres",
   host: configService.getOrThrow("DATABASE_HOST_ADDRESS"),

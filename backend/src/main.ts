@@ -1,28 +1,51 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
-import morgan from 'morgan';
-import { AppModule } from './app.module';
+import { Logger, ValidationPipe } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { NestFactory } from "@nestjs/core";
+import morgan from "morgan";
+import { AppModule } from "./app.module";
+import helmet from "helmet";
+import { NestExpressApplication } from "@nestjs/platform-express";
+import { setupSwagger } from "./setup-swagger";
 
 async function bootstrap() {
-  const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
-
-  // HTTP request logging
-  app.use(morgan('dev'));
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: false });
 
   app.enableCors({ origin: true, credentials: true });
+  app.use(morgan("dev"));
+  app.setGlobalPrefix("api/v1");
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
       transform: true,
       transformOptions: { enableImplicitConversion: true },
-    }),
+      forbidNonWhitelisted: false //@Throws if unknown properties are present
+    })
   );
 
-  const port = app.get(ConfigService).get('PORT', 3000);
-  await app.listen(port);
-  logger.log(`UdyamCoach API running on http://localhost:${port}`);
+  //Environment variables
+  const configService = app.get(ConfigService);
+  const PORT = configService.get<number>("PORT", 8848);
+  const NODE_ENV = configService.get<string>("NODE_ENV", "development");
+  const APP_URL = configService.get<string>("APP_URL");
+  const APP_NAME = configService.get<string>("APP_NAME");
+
+  if (NODE_ENV === "production") app.use(helmet());
+  else setupSwagger(app, APP_NAME as string);
+
+  // Start Server
+  await app.listen(PORT, () => {
+    console.log(`Server is starting on ${APP_URL} at ${new Date()} with process id:`, process.pid);
+    if (NODE_ENV != "production") console.log(`Swagger document ${process.env.APP_URL}/api-docs`);
+  });
+
+  // Graceful Shutdown
+  const shutdown = (signal: string): void => {
+    console.log(`[${signal}]: Server is shutting down at`, new Date());
+    app.close().finally(() => process.exit(0));
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 bootstrap();

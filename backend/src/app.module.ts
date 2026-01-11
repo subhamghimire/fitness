@@ -1,7 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
-import { AuthModule } from "./auth/auth.module";
-import { SyncModule } from "./sync/sync.module";
+import { AuthModule } from "./modules/auth/auth.module";
+import { SyncModule } from "./modules/sync/sync.module";
 import { DbModule } from "./shared/db/db.module";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { validateEnv } from "./app-env-validation";

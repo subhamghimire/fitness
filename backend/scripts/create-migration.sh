@@ -10,4 +10,4 @@ if [ -z "$1" ]; then
 fi
 
 # Create the migration file
-npm run typeorm migration:generate "database/migrations/$1" -d typeOrm.config.ts
+npm run typeorm -- migration:generate "database/migrations/$1" -d typeOrm.config.ts

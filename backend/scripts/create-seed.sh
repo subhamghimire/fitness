@@ -10,4 +10,5 @@ if [ -z "$1" ]; then
 fi
 
 # Create the seed file
-npm run  typeorm-extension seed:create --name "database/seeds/$1" 
+# pnpm typeorm-extension seed:create --name "database/seeds/$1" 
+npm run typeorm-extension -- seed:create --name "database/seeds/$1" 
