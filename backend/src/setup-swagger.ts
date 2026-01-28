@@ -27,7 +27,7 @@ export function setupSwagger(app: INestApplication, APP_NAME: string): void {
     .build();
 
   const apiDocument = SwaggerModule.createDocument(app, options, {
-    include: [SyncModule]
+    autoTagControllers: true
   });
 
   SwaggerModule.setup("/api-docs", app, apiDocument);
