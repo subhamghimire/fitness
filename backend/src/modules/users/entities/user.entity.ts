@@ -33,5 +33,5 @@ export class User extends AbstractEntity {
   coachRatings: CoachRating[];
 
   @OneToMany(() => UserWorkout, (workout) => workout.user)
-  workouts: UserWorkout[];
+  userWorkouts: UserWorkout[];
 }
