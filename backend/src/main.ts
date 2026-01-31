@@ -1,11 +1,12 @@
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
-import morgan from "morgan";
+import * as morgan from "morgan";
 import { AppModule } from "./app.module";
 import helmet from "helmet";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { setupSwagger } from "./setup-swagger";
+import { AppExceptionFilter } from "./shared/filters/app-exception.filter";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: false });
@@ -13,6 +14,8 @@ async function bootstrap() {
   app.enableCors({ origin: true, credentials: true });
   app.use(morgan("dev"));
   app.setGlobalPrefix("api/v1");
+
+  app.useGlobalFilters(new AppExceptionFilter());
 
   app.useGlobalPipes(
     new ValidationPipe({
