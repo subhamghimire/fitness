@@ -1,32 +1,26 @@
-import { ConfigService } from "@nestjs/config";
-import { DataSourceOptions, DataSource } from "typeorm";
+import { DataSource } from "typeorm";
+import type { DataSourceOptions } from "typeorm";
 import { config } from "dotenv";
-import { SeederOptions, setDataSource } from "typeorm-extension";
+import { join } from "path";
 
 config();
 
-const configService = new ConfigService();
+const rootDir = process.cwd();
 
-export const typOrmConfig: DataSourceOptions & SeederOptions = {
+const options: DataSourceOptions = {
   type: "postgres",
-  host: configService.getOrThrow("DATABASE_HOST_ADDRESS"),
-  port: configService.getOrThrow("DATABASE_PORT"),
-  database: configService.getOrThrow("POSTGRES_DB"),
-  username: configService.getOrThrow("POSTGRES_USER"),
-  password: configService.getOrThrow("POSTGRES_PASSWORD"),
+  host: process.env.DATABASE_HOST_ADDRESS,
+  port: Number(process.env.DATABASE_PORT),
+  database: process.env.POSTGRES_DB,
+  username: process.env.POSTGRES_USER,
+  password: process.env.POSTGRES_PASSWORD,
 
   logging: false,
   synchronize: false,
-
   migrationsTableName: "typeorm_migrations",
-  entities: [__dirname + "/src/modules/**/*.entity{.ts,.js}"],
-  subscribers: [__dirname + "/src/modules/**/*.subscriber{.ts,.js}"],
 
-  migrations: [__dirname + "/database/migrations/*{.ts,.js}"],
-  factories: [__dirname + "/database/factories/*{.ts,.js}"],
-  seeds: [__dirname + "/database/seeds/*{.ts,.js}"],
-  seedTracking: true
+  entities: [join(rootDir, "src/modules/**/*.entity{.ts,.js}")],
+  migrations: [join(rootDir, "database/migrations/*{.ts,.js}")]
 };
 
-export const dataSourceOrm = new DataSource(typOrmConfig);
-setDataSource(dataSourceOrm);
+export default new DataSource(options);
