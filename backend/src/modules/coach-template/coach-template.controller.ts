@@ -1,34 +1,49 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, ParseUUIDPipe, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { CoachTemplateService } from './coach-template.service';
-import { CreateCoachTemplateDto } from './dto/create-coach-template.dto';
-import { UpdateCoachTemplateDto } from './dto/update-coach-template.dto';
+import { CreateCoachTemplateDto, UpdateCoachTemplateDto, CoachTemplateQueryDto, PaginatedCoachTemplateResponseDto, CoachTemplateResponseDto } from './dto';
 
-@Controller('coach-template')
+@ApiTags('Coach Templates')
+@Controller('coach-templates')
 export class CoachTemplateController {
-  constructor(private readonly coachTemplateService: CoachTemplateService) {}
+  constructor(private readonly service: CoachTemplateService) {}
 
   @Post()
-  create(@Body() createCoachTemplateDto: CreateCoachTemplateDto) {
-    return this.coachTemplateService.create(createCoachTemplateDto);
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a coach template' })
+  @ApiResponse({ status: 201, type: CoachTemplateResponseDto })
+  create(@Body() dto: CreateCoachTemplateDto): Promise<CoachTemplateResponseDto> {
+    return this.service.create(dto);
   }
 
   @Get()
-  findAll() {
-    return this.coachTemplateService.findAll();
+  @ApiOperation({ summary: 'Get all coach templates' })
+  @ApiResponse({ status: 200, type: PaginatedCoachTemplateResponseDto })
+  findAll(@Query() query: CoachTemplateQueryDto): Promise<PaginatedCoachTemplateResponseDto> {
+    return this.service.findAll(query);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.coachTemplateService.findOne(+id);
+  @ApiOperation({ summary: 'Get a template by ID' })
+  @ApiParam({ name: 'id' })
+  @ApiResponse({ status: 200, type: CoachTemplateResponseDto })
+  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<CoachTemplateResponseDto> {
+    return this.service.findOne(id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateCoachTemplateDto: UpdateCoachTemplateDto) {
-    return this.coachTemplateService.update(+id, updateCoachTemplateDto);
+  @ApiOperation({ summary: 'Update a template' })
+  @ApiParam({ name: 'id' })
+  @ApiResponse({ status: 200, type: CoachTemplateResponseDto })
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCoachTemplateDto): Promise<CoachTemplateResponseDto> {
+    return this.service.update(id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.coachTemplateService.remove(+id);
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a template' })
+  @ApiParam({ name: 'id' })
+  remove(@Param('id', ParseUUIDPipe) id: string): Promise<{ success: boolean; message: string }> {
+    return this.service.remove(id);
   }
 }
