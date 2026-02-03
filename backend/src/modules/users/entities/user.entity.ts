@@ -1,9 +1,10 @@
-import { Entity, Column, OneToMany, Index } from "typeorm";
+import { Entity, Column, OneToMany, Index, OneToOne } from "typeorm";
 import { Workout } from "../../workouts/entities/workout.entity";
 import { AbstractEntity } from "src/entities";
 import { Gender } from "../enums";
 import { CoachRating } from "src/modules/coach-rating/entities/coach-rating.entity";
 import { UserWorkout } from "src/modules/user-workout/entities/user-workout.entity";
+import { Coach } from "src/modules/coach/entities/coach.entity";
 
 @Entity("users")
 export class User extends AbstractEntity {
@@ -34,4 +35,7 @@ export class User extends AbstractEntity {
 
   @OneToMany(() => UserWorkout, (workout) => workout.user)
   userWorkouts: UserWorkout[];
+
+  @OneToOne(() => Coach, (coach) => coach.user)
+  coachProfile: Coach;
 }

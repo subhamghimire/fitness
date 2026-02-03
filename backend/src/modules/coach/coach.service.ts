@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Coach } from './entities/coach.entity';
+import { User } from '../users/entities/user.entity';
 import { createPaginatedResponse } from 'src/common/dto';
 import {
   CreateCoachDto,
@@ -18,8 +19,21 @@ export class CoachService {
     private readonly coachRepository: Repository<Coach>
   ) {}
 
-  async create(createDto: CreateCoachDto): Promise<CoachResponseDto> {
-    const coach = this.coachRepository.create(createDto);
+  async create(createDto: CreateCoachDto, user: User): Promise<CoachResponseDto> {
+    const existingCoach = await this.coachRepository.findOne({ where: { user: { id: user.id } } });
+    if (existingCoach) {
+      throw new ConflictException('User is already a coach');
+    }
+
+    const coach = this.coachRepository.create({
+      ...createDto,
+      user
+    });
+    
+    // Default name to user's name if not provided (though dto validation requires it currently)
+    // If we make name optional in DTO later, this would be useful:
+    // if (!coach.name) coach.name = user.name;
+
     const saved = await this.coachRepository.save(coach);
     return this.toResponseDto(saved);
   }

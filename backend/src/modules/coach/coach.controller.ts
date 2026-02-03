@@ -9,13 +9,15 @@ import {
   Query,
   ParseUUIDPipe,
   HttpCode,
-  HttpStatus
+  HttpStatus,
+  UseGuards
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
-  ApiParam
+  ApiParam,
+  ApiBearerAuth
 } from '@nestjs/swagger';
 import { CoachService } from './coach.service';
 import {
@@ -25,6 +27,9 @@ import {
   PaginatedCoachResponseDto,
   CoachResponseDto
 } from './dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { User } from '../users/entities/user.entity';
 
 @ApiTags('Coaches')
 @Controller('coaches')
@@ -32,11 +37,17 @@ export class CoachController {
   constructor(private readonly coachService: CoachService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new coach' })
+  @ApiOperation({ summary: 'Create a new coach profile for the current user' })
   @ApiResponse({ status: 201, description: 'Coach created', type: CoachResponseDto })
-  create(@Body() createDto: CreateCoachDto): Promise<CoachResponseDto> {
-    return this.coachService.create(createDto);
+  @ApiResponse({ status: 409, description: 'User is already a coach' })
+  create(
+    @Body() createDto: CreateCoachDto,
+    @CurrentUser() user: User
+  ): Promise<CoachResponseDto> {
+    return this.coachService.create(createDto, user);
   }
 
   @Get()
