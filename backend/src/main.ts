@@ -2,6 +2,7 @@ import { Logger, ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import * as morgan from "morgan";
+import * as useragent from "express-useragent";
 import { AppModule } from "./app.module";
 import helmet from "helmet";
 import { NestExpressApplication } from "@nestjs/platform-express";
@@ -14,6 +15,7 @@ async function bootstrap() {
 
   app.enableCors({ origin: true, credentials: true });
   app.use(morgan("dev"));
+  app.use(useragent.express());
   app.setGlobalPrefix("api/v1");
 
   // Serve static files from uploads directory
