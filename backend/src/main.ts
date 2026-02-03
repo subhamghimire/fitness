@@ -7,6 +7,7 @@ import helmet from "helmet";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { setupSwagger } from "./setup-swagger";
 import { AppExceptionFilter } from "./shared/filters/app-exception.filter";
+import { join } from "path";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: false });
@@ -14,6 +15,9 @@ async function bootstrap() {
   app.enableCors({ origin: true, credentials: true });
   app.use(morgan("dev"));
   app.setGlobalPrefix("api/v1");
+
+  // Serve static files from uploads directory
+  app.useStaticAssets(join(__dirname, '..', 'uploads'), { prefix: '/uploads' });
 
   app.useGlobalFilters(new AppExceptionFilter());
 

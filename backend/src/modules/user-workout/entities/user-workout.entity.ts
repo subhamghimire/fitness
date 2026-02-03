@@ -1,6 +1,6 @@
 import { AbstractEntity } from "src/entities";
 import { User } from "src/modules/users/entities/user.entity";
-import { Exercise } from "src/modules/workouts/entities/exercise.entity";
+import { Exercise } from "src/modules/exercise/entities/exercise.entity";
 import { Entity, Index, Column, ManyToOne, JoinColumn } from "typeorm";
 
 @Entity({ name: "user_workouts" })
