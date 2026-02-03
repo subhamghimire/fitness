@@ -1,6 +1,5 @@
 import { AbstractEntity } from "src/entities";
-import { UserWorkout } from "src/modules/user-workout/entities/user-workout.entity";
-import { Entity, Column, Index, OneToMany } from "typeorm";
+import { Entity, Column, Index } from "typeorm";
 
 @Entity({ name: "exercises" })
 export class Exercise extends AbstractEntity {
@@ -16,7 +15,4 @@ export class Exercise extends AbstractEntity {
 
   @Column({ type: "text" })
   description: string;
-
-  @OneToMany(() => UserWorkout, (workout) => workout.exercise)
-  userWorkouts: UserWorkout[];
 }
