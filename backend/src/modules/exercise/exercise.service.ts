@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Exercise } from './entities/exercise.entity';
+import { FilesService } from '../files/files.service';
 import { createPaginatedResponse } from 'src/common/dto';
 import {
   CreateExerciseDto,
@@ -15,7 +16,8 @@ import {
 export class ExerciseService {
   constructor(
     @InjectRepository(Exercise)
-    private readonly exerciseRepository: Repository<Exercise>
+    private readonly exerciseRepository: Repository<Exercise>,
+    private readonly filesService: FilesService
   ) {}
 
   async create(createExerciseDto: CreateExerciseDto): Promise<ExerciseResponseDto> {
@@ -27,7 +29,20 @@ export class ExerciseService {
       throw new ConflictException(`Exercise with slug "${createExerciseDto.slug}" already exists`);
     }
 
-    const exercise = this.exerciseRepository.create(createExerciseDto);
+    const { imageIds, ...exerciseData } = createExerciseDto;
+    
+    // Create exercise instance
+    const exercise = this.exerciseRepository.create(exerciseData);
+    
+    // Process images if provided
+    if (imageIds && imageIds.length > 0) {
+      const files = await Promise.all(
+        imageIds.map(id => this.filesService.getFile(id))
+      );
+      // Map file entities to paths or URLs
+      exercise.images = files.map(file => file.path);
+    }
+
     const saved = await this.exerciseRepository.save(exercise);
     return this.toResponseDto(saved);
   }
@@ -63,7 +78,9 @@ export class ExerciseService {
   }
 
   async findOne(id: string): Promise<ExerciseResponseDto> {
-    const exercise = await this.exerciseRepository.findOne({ where: { id } });
+    const exercise = await this.exerciseRepository.findOne({ 
+      where: { id }
+    });
     if (!exercise) {
       throw new NotFoundException(`Exercise with ID "${id}" not found`);
     }
@@ -71,7 +88,9 @@ export class ExerciseService {
   }
 
   async findBySlug(slug: string): Promise<ExerciseResponseDto> {
-    const exercise = await this.exerciseRepository.findOne({ where: { slug } });
+    const exercise = await this.exerciseRepository.findOne({ 
+      where: { slug }
+    });
     if (!exercise) {
       throw new NotFoundException(`Exercise with slug "${slug}" not found`);
     }
@@ -79,7 +98,9 @@ export class ExerciseService {
   }
 
   async update(id: string, updateExerciseDto: UpdateExerciseDto): Promise<ExerciseResponseDto> {
-    const exercise = await this.exerciseRepository.findOne({ where: { id } });
+    const exercise = await this.exerciseRepository.findOne({ 
+      where: { id }
+    });
     if (!exercise) {
       throw new NotFoundException(`Exercise with ID "${id}" not found`);
     }
@@ -93,29 +114,19 @@ export class ExerciseService {
       }
     }
 
-    Object.assign(exercise, updateExerciseDto);
-    const saved = await this.exerciseRepository.save(exercise);
-    return this.toResponseDto(saved);
-  }
+    const { imageIds, ...updateData } = updateExerciseDto;
+    
+    // Update basic fields
+    Object.assign(exercise, updateData);
 
-  async addImages(id: string, imageUrls: string[]): Promise<ExerciseResponseDto> {
-    const exercise = await this.exerciseRepository.findOne({ where: { id } });
-    if (!exercise) {
-      throw new NotFoundException(`Exercise with ID "${id}" not found`);
+    // Update images if provided
+    if (imageIds) {
+      const files = await Promise.all(
+        imageIds.map(fileId => this.filesService.getFile(fileId))
+      );
+      exercise.images = files.map(file => file.path);
     }
 
-    exercise.images = [...(exercise.images || []), ...imageUrls];
-    const saved = await this.exerciseRepository.save(exercise);
-    return this.toResponseDto(saved);
-  }
-
-  async removeImage(id: string, imageUrl: string): Promise<ExerciseResponseDto> {
-    const exercise = await this.exerciseRepository.findOne({ where: { id } });
-    if (!exercise) {
-      throw new NotFoundException(`Exercise with ID "${id}" not found`);
-    }
-
-    exercise.images = (exercise.images || []).filter(img => img !== imageUrl);
     const saved = await this.exerciseRepository.save(exercise);
     return this.toResponseDto(saved);
   }
@@ -140,7 +151,7 @@ export class ExerciseService {
       title: exercise.title,
       slug: exercise.slug,
       description: exercise.description,
-      images: exercise.images,
+      images: exercise.images || [],
       createdAt: exercise.createdAt,
       updatedAt: exercise.updatedAt
     };

@@ -31,15 +31,12 @@ import {
   PaginatedExerciseResponseDto,
   ExerciseResponseDto
 } from './dto';
-import { FileUploadService, UploadedFile } from 'src/common/services';
-import 'multer';
 
 @ApiTags('Exercises')
 @Controller('exercises')
 export class ExerciseController {
   constructor(
-    private readonly exerciseService: ExerciseService,
-    private readonly fileUploadService: FileUploadService
+    private readonly exerciseService: ExerciseService
   ) {}
 
   @Post()
@@ -49,59 +46,6 @@ export class ExerciseController {
   @ApiResponse({ status: 409, description: 'Slug already exists' })
   create(@Body() createExerciseDto: CreateExerciseDto): Promise<ExerciseResponseDto> {
     return this.exerciseService.create(createExerciseDto);
-  }
-
-  @Post(':id/images')
-  @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FilesInterceptor('images', 10))
-  @ApiOperation({ summary: 'Upload images for an exercise' })
-  @ApiConsumes('multipart/form-data')
-  @ApiParam({ name: 'id', description: 'Exercise UUID' })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        images: {
-          type: 'array',
-          items: { type: 'string', format: 'binary' }
-        }
-      }
-    }
-  })
-  @ApiResponse({ status: 200, description: 'Images uploaded', type: ExerciseResponseDto })
-  async uploadImages(
-    @Param('id', ParseUUIDPipe) id: string,
-    @UploadedFiles() files: Express.Multer.File[]
-  ): Promise<ExerciseResponseDto> {
-    if (!files || files.length === 0) {
-      throw new BadRequestException('No files uploaded');
-    }
-
-    const uploadedFiles: UploadedFile[] = files.map(f => ({
-      fieldname: f.fieldname,
-      originalname: f.originalname,
-      encoding: f.encoding,
-      mimetype: f.mimetype,
-      buffer: f.buffer,
-      size: f.size
-    }));
-
-    const urls = await this.fileUploadService.uploadFiles(uploadedFiles, 'exercises');
-    return this.exerciseService.addImages(id, urls);
-  }
-
-  @Delete(':id/images')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Remove an image from exercise' })
-  @ApiParam({ name: 'id', description: 'Exercise UUID' })
-  @ApiBody({ schema: { type: 'object', properties: { imageUrl: { type: 'string' } } } })
-  @ApiResponse({ status: 200, description: 'Image removed', type: ExerciseResponseDto })
-  async removeImage(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body('imageUrl') imageUrl: string
-  ): Promise<ExerciseResponseDto> {
-    await this.fileUploadService.deleteFile(imageUrl);
-    return this.exerciseService.removeImage(id, imageUrl);
   }
 
   @Get()

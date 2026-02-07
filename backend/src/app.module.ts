@@ -12,6 +12,7 @@ import { CoachTemplateModule } from './modules/coach-template/coach-template.mod
 import { CoachRatingModule } from './modules/coach-rating/coach-rating.module';
 import { ExerciseModule } from './modules/exercise/exercise.module';
 import { UserWorkoutModule } from './modules/user-workout/user-workout.module';
+import { FilesModule } from './modules/files/files.module';
 
 @Module({
   imports: [
@@ -31,7 +32,8 @@ import { UserWorkoutModule } from './modules/user-workout/user-workout.module';
     CoachTemplateModule,
     CoachRatingModule,
     ExerciseModule,
-    UserWorkoutModule
+    UserWorkoutModule,
+    FilesModule
   ],
   providers: [
     {
