@@ -19,9 +19,9 @@ export class CreateExerciseDto {
   @MinLength(10)
   description: string;
 
-  @ApiPropertyOptional({ type: [String], description: 'Image URLs (handled via upload endpoint)' })
+  @ApiPropertyOptional({ type: [String], description: 'Image file IDs', example: ['uuid1', 'uuid2'] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  images?: string[];
+  imageIds?: string[];
 }

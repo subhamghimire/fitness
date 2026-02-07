@@ -12,14 +12,12 @@ export class ExerciseSeed1769877012387 implements Seeder {
       {
         title: "Push Up",
         slug: "push-up",
-        description: "A bodyweight exercise targeting chest, shoulders, and triceps.",
-        images: ["pushup1.png", "pushup2.png"]
+        description: "A classic bodyweight exercise."
       },
       {
         title: "Squat",
         slug: "squat",
-        description: "Compound lower body movement targeting quads and glutes.",
-        images: ["squat.png"]
+        description: "A fundamental lower body exercise."
       },
       {
         title: "Plank",
