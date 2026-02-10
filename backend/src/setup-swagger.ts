@@ -1,6 +1,5 @@
 import { INestApplication } from "@nestjs/common";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
-import { SyncModule } from "./modules/sync/sync.module";
 
 export function setupSwagger(app: INestApplication, APP_NAME: string): void {
   const options = new DocumentBuilder()
@@ -15,15 +14,6 @@ export function setupSwagger(app: INestApplication, APP_NAME: string): void {
       type: "http",
       in: "Header"
     })
-    .addApiKey(
-      {
-        type: "apiKey",
-        name: "x-api-key",
-        in: "header",
-        description: "Enter your API key"
-      },
-      "x-api-key"
-    )
     .build();
 
   const apiDocument = SwaggerModule.createDocument(app, options, {

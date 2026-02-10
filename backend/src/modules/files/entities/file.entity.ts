@@ -1,8 +1,9 @@
-import { Entity, Column } from "typeorm";
+import { Entity, Column, JoinColumn, ManyToOne } from "typeorm";
 import { AbstractEntity } from "src/entities";
 import { ApiProperty } from "@nestjs/swagger";
 
 import { FileFolder } from "../enums/file-folder.enum";
+import { Exercise } from "src/modules/exercise/entities/exercise.entity";
 
 @Entity("files")
 export class FileEntity extends AbstractEntity {
@@ -30,5 +31,9 @@ export class FileEntity extends AbstractEntity {
   @Column({ default: FileFolder.MISC })
   type: FileFolder;
 
-
+  @ManyToOne(() => Exercise, (exercise) => exercise.images, {
+    onDelete: "CASCADE"
+  })
+  @JoinColumn({ name: "exercise_id" })
+  exercise: Exercise;
 }
