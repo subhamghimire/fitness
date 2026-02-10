@@ -85,6 +85,7 @@ export class ExerciseService {
     const exercise = await this.exerciseRepository.findOne({
       where: { id }
     });
+
     if (!exercise) {
       throw new NotFoundException(`Exercise with ID "${id}" not found`);
     }
@@ -93,6 +94,7 @@ export class ExerciseService {
       const existing = await this.exerciseRepository.findOne({
         where: { slug: updateExerciseDto.slug }
       });
+
       if (existing) {
         throw new ConflictException(`Exercise with slug "${updateExerciseDto.slug}" already exists`);
       }
@@ -103,10 +105,32 @@ export class ExerciseService {
     // Update basic fields
     Object.assign(exercise, updateData);
 
-    // Update images if provided
-    if (imageIds) {
-      const files = await Promise.all(imageIds.map((fileId) => this.filesService.getFile(fileId)));
-      // exercise.images = files.map((file) => file.path);
+    // Process images if provided
+    if (imageIds && imageIds.length > 0) {
+      const files = await this.filesService.getFiles(imageIds);
+
+      // Map file entities to paths or URLs
+      exercise.images = files;
+    }
+    const saved = await this.exerciseRepository.save(exercise);
+    return this.toResponseDto(saved);
+  }
+
+  async enableDisable(id: string): Promise<ExerciseResponseDto> {
+    const exercise = await this.exerciseRepository.findOne({ where: { id } });
+
+    if (!exercise) {
+      throw new NotFoundException("Exercise not found");
+    }
+
+    if (exercise.isDeleted) {
+      exercise.isDeleted = false;
+      exercise.deletedAt = null;
+      exercise.deletedBy = null;
+    } else {
+      exercise.isDeleted = true;
+      exercise.deletedAt = new Date();
+      // exercise.deletedBy = userId;
     }
 
     const saved = await this.exerciseRepository.save(exercise);
@@ -114,7 +138,7 @@ export class ExerciseService {
   }
 
   async remove(id: string): Promise<{ success: boolean; message: string }> {
-    const exercise = await this.exerciseRepository.findOne({ where: { id } });
+    const exercise = await this.exerciseRepository.findOne({ where: { id, isDeleted: true } });
     if (!exercise) {
       throw new NotFoundException(`Exercise with ID "${id}" not found`);
     }

@@ -42,6 +42,16 @@ export class ExerciseController {
     return this.exerciseService.update(id, updateExerciseDto);
   }
 
+  @Patch(":id/enable_disable")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Enable or disable an exercise" })
+  @ApiParam({ name: "id", description: "Exercise UUID" })
+  @ApiResponse({ status: 200, description: "Exercise status updated", type: ExerciseResponseDto })
+  @ApiResponse({ status: 404, description: "Exercise not found" })
+  enableDisable(@Param("id", ParseUUIDPipe) id: string): Promise<ExerciseResponseDto> {
+    return this.exerciseService.enableDisable(id);
+  }
+
   @Delete(":id")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Delete an exercise" })

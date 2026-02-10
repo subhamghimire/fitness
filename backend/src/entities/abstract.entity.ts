@@ -14,8 +14,8 @@ export class AbstractEntity extends BaseEntity {
   isDeleted: boolean;
 
   @Column({ type: "timestamptz", name: "deleted_at", nullable: true })
-  deletedAt: Date;
+  deletedAt: Date | null;
 
   @Column({ type: "uuid", name: "deleted_by", nullable: true })
-  deletedBy: string;
+  deletedBy: string | null;
 }
