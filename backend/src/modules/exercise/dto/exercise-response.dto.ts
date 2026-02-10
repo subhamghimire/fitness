@@ -14,8 +14,8 @@ export class ExerciseResponseDto {
   @ApiProperty({ example: "A compound chest exercise performed on a flat bench." })
   description: string;
 
-  // @ApiProperty({ type: [String], example: ['uploads/exercises/image.jpg'] })
-  // images: string[];
+  @ApiProperty({ type: [String], example: ["uploads/exercises/image.jpg"] })
+  images: string[];
 
   @ApiProperty()
   createdAt: Date;

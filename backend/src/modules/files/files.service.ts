@@ -1,17 +1,17 @@
-import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { FileEntity } from './entities/file.entity';
-import * as fs from 'fs';
-import * as path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { Injectable, NotFoundException, Logger, BadRequestException } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { In, Repository } from "typeorm";
+import { FileEntity } from "./entities/file.entity";
+import * as fs from "fs";
+import * as path from "path";
+import { v4 as uuidv4 } from "uuid";
 
-import { FileFolder } from './enums/file-folder.enum';
+import { FileFolder } from "./enums/file-folder.enum";
 
 @Injectable()
 export class FilesService {
   private readonly logger = new Logger(FilesService.name);
-  private readonly uploadDir = 'uploads';
+  private readonly uploadDir = "uploads";
 
   constructor(
     @InjectRepository(FileEntity)
@@ -28,7 +28,7 @@ export class FilesService {
 
   async uploadFile(file: Express.Multer.File, folder: FileFolder = FileFolder.MISC): Promise<FileEntity> {
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new BadRequestException("No file provided");
     }
 
     const targetDir = path.join(this.uploadDir, folder);
@@ -47,7 +47,7 @@ export class FilesService {
       originalName: file.originalname,
       filename: filename,
       mimetype: file.mimetype,
-      path: filePath.replace(/\\/g, '/'), // Ensure posix paths
+      path: filePath.replace(/\\/g, "/"), // Ensure posix paths
       size: file.size,
       type: folder
     });
@@ -74,10 +74,10 @@ export class FilesService {
         fs.unlinkSync(file.path);
       }
       await this.fileRepository.remove(file);
-      return { success: true, message: 'File deleted successfully' };
+      return { success: true, message: "File deleted successfully" };
     } catch (error) {
       this.logger.error(`Failed to delete file ${file.path}: ${error.message}`);
-      throw new BadRequestException('Failed to delete file from storage');
+      throw new BadRequestException("Failed to delete file from storage");
     }
   }
 
@@ -87,5 +87,17 @@ export class FilesService {
       throw new NotFoundException(`File with ID "${id}" not found`);
     }
     return file;
+  }
+
+  async getFiles(ids: string[]): Promise<FileEntity[]> {
+    const files = await this.fileRepository.find({
+      where: { id: In(ids) }
+    });
+
+    if (!files || files.length === 0) {
+      throw new NotFoundException(`Files with IDs "${ids.join(", ")}" not found`);
+    }
+
+    return files;
   }
 }

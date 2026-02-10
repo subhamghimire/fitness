@@ -19,7 +19,7 @@ async function bootstrap() {
   app.setGlobalPrefix("api/v1");
 
   // Serve static files from uploads directory
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), { prefix: '/uploads' });
+  app.useStaticAssets(join(process.cwd(), "uploads"), { prefix: "/uploads" });
 
   app.useGlobalFilters(new AppExceptionFilter());
 
