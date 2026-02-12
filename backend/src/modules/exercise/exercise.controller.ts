@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, ParseUUIDPipe, HttpCode, HttpStatus } from "@nestjs/common";
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, ParseUUIDPipe, HttpCode, HttpStatus, Put } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from "@nestjs/swagger";
 import { ExerciseService } from "./exercise.service";
 import { CreateExerciseDto, UpdateExerciseDto, ExerciseQueryDto, PaginatedExerciseResponseDto, ExerciseResponseDto } from "./dto";
@@ -33,7 +33,7 @@ export class ExerciseController {
     return this.exerciseService.findOne(id_slug);
   }
 
-  @Patch(":id")
+  @Put(":id")
   @ApiOperation({ summary: "Update an exercise" })
   @ApiParam({ name: "id", description: "Exercise UUID" })
   @ApiResponse({ status: 200, description: "Exercise updated", type: ExerciseResponseDto })

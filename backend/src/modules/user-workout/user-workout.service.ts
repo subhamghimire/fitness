@@ -1,15 +1,9 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { UserWorkout } from './entities/user-workout.entity';
-import { createPaginatedResponse } from 'src/common/dto';
-import {
-  CreateUserWorkoutDto,
-  UpdateUserWorkoutDto,
-  UserWorkoutQueryDto,
-  PaginatedUserWorkoutResponseDto,
-  UserWorkoutResponseDto
-} from './dto';
+import { Injectable, NotFoundException, ConflictException } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { UserWorkout } from "./entities/user-workout.entity";
+import { createPaginatedResponse } from "src/common/dto";
+import { CreateUserWorkoutDto, UpdateUserWorkoutDto, UserWorkoutQueryDto, PaginatedUserWorkoutResponseDto, UserWorkoutResponseDto } from "./dto";
 
 @Injectable()
 export class UserWorkoutService {
@@ -25,7 +19,7 @@ export class UserWorkoutService {
     });
 
     if (existing) {
-      throw new ConflictException('Exercise already added to your workouts');
+      throw new ConflictException("Exercise already added to your workouts");
     }
 
     const userWorkout = this.userWorkoutRepository.create({
@@ -38,18 +32,18 @@ export class UserWorkoutService {
   }
 
   async findAll(userId: string, query: UserWorkoutQueryDto): Promise<PaginatedUserWorkoutResponseDto> {
-    const { exerciseId, page = 1, limit = 20, sortOrder = 'DESC' } = query;
+    const { exerciseId, page = 1, limit = 20, sortOrder = "DESC" } = query;
 
     const queryBuilder = this.userWorkoutRepository
-      .createQueryBuilder('userWorkout')
-      .leftJoinAndSelect('userWorkout.exercise', 'exercise')
-      .where('userWorkout.userId = :userId', { userId });
+      .createQueryBuilder("userWorkout")
+      .leftJoinAndSelect("userWorkout.exercise", "exercise")
+      .where("userWorkout.userId = :userId", { userId });
 
     if (exerciseId) {
-      queryBuilder.andWhere('userWorkout.exerciseId = :exerciseId', { exerciseId });
+      queryBuilder.andWhere("userWorkout.exerciseId = :exerciseId", { exerciseId });
     }
 
-    queryBuilder.orderBy('userWorkout.createdAt', sortOrder === 'ASC' ? 'ASC' : 'DESC');
+    queryBuilder.orderBy("userWorkout.createdAt", sortOrder === "ASC" ? "ASC" : "DESC");
 
     const total = await queryBuilder.getCount();
     const skip = (page - 1) * limit;
@@ -58,7 +52,7 @@ export class UserWorkoutService {
     const userWorkouts = await queryBuilder.getMany();
 
     return createPaginatedResponse(
-      userWorkouts.map(uw => this.toResponseDto(uw)),
+      userWorkouts.map((uw) => this.toResponseDto(uw)),
       total,
       page,
       limit
@@ -68,7 +62,7 @@ export class UserWorkoutService {
   async findOne(userId: string, id: string): Promise<UserWorkoutResponseDto> {
     const userWorkout = await this.userWorkoutRepository.findOne({
       where: { id, userId },
-      relations: ['exercise']
+      relations: ["exercise"]
     });
 
     if (!userWorkout) {
@@ -102,7 +96,7 @@ export class UserWorkoutService {
     }
 
     await this.userWorkoutRepository.remove(userWorkout);
-    return { success: true, message: 'Exercise removed from your workouts' };
+    return { success: true, message: "Exercise removed from your workouts" };
   }
 
   async count(userId: string): Promise<number> {

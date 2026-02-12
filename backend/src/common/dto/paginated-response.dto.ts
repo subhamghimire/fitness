@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty } from "@nestjs/swagger";
 
 export class PaginationMeta {
   @ApiProperty({ example: 100 })
@@ -27,14 +27,9 @@ export class PaginatedResponseDto<T> {
   pagination: PaginationMeta;
 }
 
-export function createPaginatedResponse<T>(
-  data: T[],
-  total: number,
-  page: number,
-  limit: number
-): PaginatedResponseDto<T> {
+export function createPaginatedResponse<T>(data: T[], total: number, page: number, limit: number): PaginatedResponseDto<T> {
   const totalPages = Math.ceil(total / limit);
-  
+
   return {
     data,
     pagination: {

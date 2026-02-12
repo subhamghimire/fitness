@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { ApiProperty } from "@nestjs/swagger";
 import { PaginatedResponseDto, PaginationMeta } from "src/common/dto";
 
 export class ExerciseResponseDto {

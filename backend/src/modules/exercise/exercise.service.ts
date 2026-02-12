@@ -44,7 +44,7 @@ export class ExerciseService {
   }
 
   async findAll(query: ExerciseQueryDto): Promise<PaginatedExerciseResponseDto> {
-    const { search, page = 1, limit = 20, sortBy = "title", sortOrder = "ASC" } = query;
+    const { search, page, limit, sortBy = "title", sortOrder = "ASC" } = query;
 
     const queryBuilder = this.exerciseRepository.createQueryBuilder("exercise").leftJoinAndSelect("exercise.images", "files");
 
@@ -149,13 +149,8 @@ export class ExerciseService {
 
   private toResponseDto(exercise: Exercise): ExerciseResponseDto {
     return {
-      id: exercise.id,
-      title: exercise.title,
-      slug: exercise.slug,
-      description: exercise.description,
-      images: exercise.images ? exercise.images.map((file) => `${this.configService.get<string>("APP_URL")}/${file.path}`) : [],
-      createdAt: exercise.createdAt,
-      updatedAt: exercise.updatedAt
+      ...exercise,
+      images: exercise.images ? exercise.images.map((file) => `${this.configService.get<string>("APP_URL")}/${file.path}`) : []
     };
   }
 }
