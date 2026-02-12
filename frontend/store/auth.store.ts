@@ -20,18 +20,20 @@ export const useAuthStore = create<AuthState>((set) => ({
       console.log(email, password);
       const { data } = await authApi.login(email, password);
       console.log(data);
-      await SecureStore.setItemAsync(TOKEN_KEY, data.token);
+      const token = data.tokens.accessToken;
+      await SecureStore.setItemAsync(TOKEN_KEY, token);
       await SecureStore.setItemAsync(USER_KEY, JSON.stringify(data.user));
-      set({ token: data.token, user: data.user, isAuthenticated: true, isLoading: false });
+      set({ token, user: data.user, isAuthenticated: true, isLoading: false });
     } catch (e: any) { const msg = e.response?.data?.message || 'Login failed'; set({ isLoading: false, error: msg }); throw new Error(msg); }
   },
   register: async (email, password) => {
     set({ isLoading: true, error: null });
     try {
       const { data } = await authApi.register(email, password);
-      await SecureStore.setItemAsync(TOKEN_KEY, data.token);
+      const token = data.tokens.accessToken;
+      await SecureStore.setItemAsync(TOKEN_KEY, token);
       await SecureStore.setItemAsync(USER_KEY, JSON.stringify(data.user));
-      set({ token: data.token, user: data.user, isAuthenticated: true, isLoading: false });
+      set({ token, user: data.user, isAuthenticated: true, isLoading: false });
     } catch (e: any) { const msg = e.response?.data?.message || 'Registration failed'; set({ isLoading: false, error: msg }); throw new Error(msg); }
   },
   logout: async () => {

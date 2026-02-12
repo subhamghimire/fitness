@@ -8,4 +8,4 @@ export interface ExerciseLocal { id: string; workout_id: string; name: string; o
 export interface SetLocal { id: string; exercise_id: string; weight: number | null; reps: number | null; rpe: number | null; is_warmup: number; }
 export interface SyncPayload { workout: { id: string; startedAt: string; endedAt: string | null; exercises: { id: string; name: string; orderIndex: number; sets: { id: string; weight: number | null; reps: number | null; rpe: number | null; isWarmup: boolean; }[]; }[]; }; }
 export interface SyncResult { success: boolean; syncedWorkoutIds: string[]; errors: string[]; }
-export interface AuthResponse { token: string; user: User; }
+export interface AuthResponse { tokens: { accessToken: string; refreshToken: string; expiresIn: number; }; user: User; }
