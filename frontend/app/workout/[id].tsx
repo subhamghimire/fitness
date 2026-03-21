@@ -1,12 +1,6 @@
 import React, { useEffect } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
@@ -15,119 +9,59 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { WorkoutTimer } from '@/components/WorkoutTimer';
 import { ExerciseCard } from '@/components/ExerciseCard';
 import { syncService } from '@/sync/sync.service';
-import Colors from '@/constants/Colors';
+import { C } from '@/constants/Colors';
 
 export default function ActiveWorkoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const colors = Colors[colorScheme ?? 'light'];
+  const isDark = useColorScheme() === 'dark';
+  const c = isDark ? C.dark : C.light;
 
-  const {
-    activeWorkout,
-    isLoading,
-    loadActiveWorkout,
-    addSet,
-    updateSet,
-    removeSet,
-    toggleWarmup,
-    removeExercise,
-    endWorkout,
-    cancelWorkout,
-  } = useWorkoutStore();
+  const { activeWorkout, isLoading, loadActiveWorkout, addSet, updateSet, removeSet, toggleWarmup, removeExercise, endWorkout, cancelWorkout } = useWorkoutStore();
 
-  useEffect(() => {
-    loadActiveWorkout();
-  }, []);
+  useEffect(() => { loadActiveWorkout(); }, []);
 
-  const handleFinishWorkout = () => {
+  const handleFinish = () => {
     if (!activeWorkout) return;
-
-    // Check if workout has any exercises
     if (activeWorkout.exercises.length === 0) {
-      Alert.alert(
-        'Empty Workout',
-        'Add at least one exercise before finishing.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Empty Workout', 'Add at least one exercise before finishing.', [{ text: 'OK' }]);
       return;
     }
-
-    Alert.alert(
-      'Finish Workout',
-      'Are you sure you want to finish this workout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Finish',
-          onPress: async () => {
-            await endWorkout();
-            // Trigger sync
-            syncService.triggerSync();
-            router.replace('/(tabs)');
-          },
-        },
-      ]
-    );
+    Alert.alert('Finish Workout', 'Ready to save this workout?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Finish', onPress: async () => { await endWorkout(); syncService.triggerSync(); router.replace('/(tabs)'); } },
+    ]);
   };
 
-  const handleCancelWorkout = () => {
-    Alert.alert(
-      'Cancel Workout',
-      'Are you sure you want to cancel? This workout will be deleted.',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            await cancelWorkout();
-            router.replace('/(tabs)');
-          },
-        },
-      ]
-    );
+  const handleCancel = () => {
+    Alert.alert('Cancel Workout', 'Discard this workout entirely?', [
+      { text: 'Keep Going', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: async () => { await cancelWorkout(); router.replace('/(tabs)'); } },
+    ]);
   };
 
-  const handleAddExercise = () => {
-    router.push('/workout/exercise-picker');
-  };
-
-  const handleDeleteExercise = (exerciseId: string, exerciseName: string) => {
-    Alert.alert(
-      'Remove Exercise',
-      `Remove "${exerciseName}" from this workout?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => removeExercise(exerciseId),
-        },
-      ]
-    );
+  const handleDelete = (exerciseId: string, name: string) => {
+    Alert.alert('Remove Exercise', `Remove "${name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => removeExercise(exerciseId) },
+    ]);
   };
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: isDark ? '#000' : '#f2f2f7' }]}>
-        <ActivityIndicator size="large" color={colors.tint} />
+      <View style={[styles.center, { backgroundColor: c.background }]}>
+        <ActivityIndicator size="large" color={c.accent} />
       </View>
     );
   }
 
   if (!activeWorkout) {
     return (
-      <View style={[styles.emptyContainer, { backgroundColor: isDark ? '#000' : '#f2f2f7' }]}>
-        <Text style={[styles.emptyText, { color: colors.text }]}>
-          No active workout found
-        </Text>
-        <TouchableOpacity
-          style={[styles.goBackButton, { backgroundColor: colors.tint }]}
-          onPress={() => router.replace('/(tabs)')}
-        >
-          <Text style={styles.goBackButtonText}>Go Back</Text>
+      <View style={[styles.center, { backgroundColor: c.background }]}>
+        <FontAwesome name="bolt" size={40} color={c.textTertiary} />
+        <Text style={[styles.noWorkoutText, { color: c.text }]}>No active workout</Text>
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: c.accent }]} onPress={() => router.replace('/(tabs)')}>
+          <Text style={styles.backBtnText}>Go Home</Text>
         </TouchableOpacity>
       </View>
     );
@@ -137,35 +71,40 @@ export default function ActiveWorkoutScreen() {
     <>
       <Stack.Screen
         options={{
-          title: 'Workout',
+          title: '',
+          headerStyle: { backgroundColor: c.surface },
+          headerShadowVisible: false,
           headerLeft: () => (
-            <TouchableOpacity onPress={handleCancelWorkout}>
-              <Text style={{ color: '#ff3b30', fontSize: 16 }}>Cancel</Text>
-            </TouchableOpacity>
-          ),
-          headerRight: () => (
-            <TouchableOpacity onPress={handleFinishWorkout}>
-              <Text style={{ color: colors.tint, fontSize: 16, fontWeight: '600' }}>
-                Finish
-              </Text>
+            <TouchableOpacity style={[styles.headerBtn, { backgroundColor: c.dangerSoft }]} onPress={handleCancel}>
+              <Text style={[styles.headerBtnText, { color: c.danger }]}>Cancel</Text>
             </TouchableOpacity>
           ),
           headerTitle: () => (
-            <WorkoutTimer
-              startTime={activeWorkout.startedAt}
-              textColor={colors.text}
-            />
+            <View style={styles.timerContainer}>
+              <View style={styles.timerDot} />
+              <WorkoutTimer startTime={activeWorkout.startedAt} textColor={c.text} fontSize={19} />
+            </View>
+          ),
+          headerRight: () => (
+            <TouchableOpacity style={[styles.headerBtn, { backgroundColor: c.accentSoft }]} onPress={handleFinish}>
+              <Text style={[styles.headerBtnText, { color: c.accent }]}>Finish</Text>
+            </TouchableOpacity>
           ),
         }}
       />
 
-      <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#f2f2f7' }]}>
+      <View style={[styles.container, { backgroundColor: c.background }]}>
         <ScrollView
-          style={styles.scrollView}
+          style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {/* Exercises */}
+          {/* Exercise count */}
+          <Text style={[styles.setCount, { color: c.textSecondary }]}>
+            {activeWorkout.exercises.length} exercise{activeWorkout.exercises.length !== 1 ? 's' : ''}
+          </Text>
+
           {activeWorkout.exercises.map((exercise) => (
             <ExerciseCard
               key={exercise.id}
@@ -174,35 +113,31 @@ export default function ActiveWorkoutScreen() {
               onUpdateSet={updateSet}
               onDeleteSet={removeSet}
               onToggleWarmup={toggleWarmup}
-              onDeleteExercise={() => handleDeleteExercise(exercise.id, exercise.name)}
+              onDeleteExercise={() => handleDelete(exercise.id, exercise.name)}
               isDark={isDark}
             />
           ))}
 
-          {/* Empty State */}
           {activeWorkout.exercises.length === 0 && (
-            <View style={styles.emptyWorkout}>
-              <FontAwesome
-                name="plus-circle"
-                size={48}
-                color={isDark ? '#3a3a3c' : '#c7c7cc'}
-              />
-              <Text style={[styles.emptyWorkoutText, { color: colors.text, opacity: 0.6 }]}>
-                Add your first exercise
+            <View style={[styles.emptyExercise, { borderColor: c.border }]}>
+              <FontAwesome name="plus-circle" size={40} color={c.textTertiary} />
+              <Text style={[styles.emptyExerciseTitle, { color: c.text }]}>Add your first exercise</Text>
+              <Text style={[styles.emptyExerciseBody, { color: c.textSecondary }]}>
+                Tap the button below to search and add an exercise
               </Text>
             </View>
           )}
         </ScrollView>
 
-        {/* Add Exercise Button */}
-        <View style={[styles.bottomBar, { backgroundColor: isDark ? '#1c1c1e' : '#fff' }]}>
+        {/* Bottom Add Exercise bar */}
+        <View style={[styles.bottomBar, { backgroundColor: c.surface, borderTopColor: c.border }]}>
           <TouchableOpacity
-            style={[styles.addExerciseButton, { backgroundColor: colors.tint }]}
-            onPress={handleAddExercise}
-            activeOpacity={0.8}
+            style={[styles.addExBtn, { backgroundColor: c.accent }]}
+            onPress={() => router.push('/workout/exercise-picker')}
+            activeOpacity={0.85}
           >
             <FontAwesome name="plus" size={16} color="#fff" />
-            <Text style={styles.addExerciseText}>Add Exercise</Text>
+            <Text style={styles.addExText}>Add Exercise</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -211,70 +146,33 @@ export default function ActiveWorkoutScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
+  container: { flex: 1 },
+  noWorkoutText: { fontSize: 18, fontWeight: '600' },
+  backBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
+  backBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  headerBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10 },
+  headerBtnText: { fontSize: 14, fontWeight: '700' },
+  timerContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  timerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#30D158' },
+  scroll: { flex: 1 },
+  scrollContent: { padding: 16, paddingBottom: 110 },
+  setCount: { fontSize: 13, fontWeight: '600', marginBottom: 12, letterSpacing: 0.2 },
+  emptyExercise: {
+    alignItems: 'center', paddingVertical: 48, borderRadius: 16, borderWidth: 1,
+    borderStyle: 'dashed', gap: 10, marginTop: 8,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  emptyText: {
-    fontSize: 18,
-    marginBottom: 16,
-  },
-  goBackButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  goBackButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  emptyWorkout: {
-    alignItems: 'center',
-    paddingVertical: 48,
-    gap: 16,
-  },
-  emptyWorkoutText: {
-    fontSize: 16,
-  },
+  emptyExerciseTitle: { fontSize: 17, fontWeight: '700' },
+  emptyExerciseBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: 32 },
   bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    paddingBottom: 32,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e5ea',
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingHorizontal: 20, paddingBottom: 34, paddingTop: 14, borderTopWidth: 1,
   },
-  addExerciseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 50,
-    borderRadius: 12,
-    gap: 8,
+  addExBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    height: 52, borderRadius: 14, gap: 10,
+    shadowColor: '#6C63FF', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
-  addExerciseText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  addExText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
 });

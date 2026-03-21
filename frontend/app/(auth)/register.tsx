@@ -1,182 +1,93 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Alert,
-  ScrollView,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/auth.store';
 import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
+import { C } from '@/constants/Colors';
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const { register, isLoading } = useAuthStore();
   const router = useRouter();
-  const colorScheme = useColorScheme();
-
-  const colors = Colors[colorScheme ?? 'light'];
-  const isDark = colorScheme === 'dark';
-
-  const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
+  const isDark = useColorScheme() === 'dark';
+  const c = isDark ? C.dark : C.light;
 
   const handleRegister = async () => {
-    // Validation
-    if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-
-    if (!validateEmail(email.trim())) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
-
-    try {
-      await register(email.trim(), password);
-      router.replace('/(tabs)');
-    } catch (err: any) {
-      Alert.alert('Registration Failed', err.message || 'Please try again');
-    }
+    if (!email.trim() || !password.trim() || !confirm.trim()) { Alert.alert('Error', 'Fill in all fields'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { Alert.alert('Error', 'Invalid email address'); return; }
+    if (password.length < 6) { Alert.alert('Error', 'Password must be at least 6 characters'); return; }
+    if (password !== confirm) { Alert.alert('Error', 'Passwords do not match'); return; }
+    try { await register(email.trim(), password); router.replace('/(tabs)'); }
+    catch (err: any) { Alert.alert('Registration Failed', err.message || 'Please try again'); }
   };
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}
+      style={[styles.container, { backgroundColor: c.background }]}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.content}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.text }]}>UdyamCoach</Text>
-            <Text style={[styles.subtitle, { color: colors.text, opacity: 0.7 }]}>
-              Create your account
-            </Text>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={styles.inner}>
+          {/* Brand */}
+          <View style={styles.brand}>
+            <View style={[styles.logoBox, { backgroundColor: c.accent }]}>
+              <Text style={styles.logoEmoji}>⚡</Text>
+            </View>
+            <Text style={[styles.logoTitle, { color: c.text }]}>FitTrack</Text>
+            <Text style={[styles.logoSub, { color: c.textSecondary }]}>Create your account</Text>
           </View>
 
-          {/* Form */}
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: colors.text }]}>Email</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: isDark ? '#1c1c1e' : '#f2f2f7',
-                    color: colors.text,
-                  },
-                ]}
-                placeholder="Enter your email"
-                placeholderTextColor={isDark ? '#8e8e93' : '#c7c7cc'}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                editable={!isLoading}
-              />
-            </View>
+          {/* Card form */}
+          <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+            <Text style={[styles.cardTitle, { color: c.text }]}>Get started</Text>
 
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: colors.text }]}>Password</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: isDark ? '#1c1c1e' : '#f2f2f7',
-                    color: colors.text,
-                  },
-                ]}
-                placeholder="Create a password"
-                placeholderTextColor={isDark ? '#8e8e93' : '#c7c7cc'}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                textContentType="newPassword"
-                editable={!isLoading}
-              />
-              <Text style={[styles.hint, { color: colors.text, opacity: 0.5 }]}>
-                At least 6 characters
-              </Text>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: colors.text }]}>
-                Confirm Password
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: isDark ? '#1c1c1e' : '#f2f2f7',
-                    color: colors.text,
-                  },
-                ]}
-                placeholder="Confirm your password"
-                placeholderTextColor={isDark ? '#8e8e93' : '#c7c7cc'}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry
-                textContentType="newPassword"
-                editable={!isLoading}
-              />
+            <View style={styles.fields}>
+              {[
+                { label: 'Email', value: email, onSet: setEmail, type: 'email-address', content: 'emailAddress', secure: false, hint: undefined },
+                { label: 'Password', value: password, onSet: setPassword, type: 'default', content: 'newPassword', secure: true, hint: 'At least 6 characters' },
+                { label: 'Confirm Password', value: confirm, onSet: setConfirm, type: 'default', content: 'newPassword', secure: true, hint: undefined },
+              ].map((f) => (
+                <View key={f.label} style={styles.field}>
+                  <Text style={[styles.label, { color: c.textSecondary }]}>{f.label}</Text>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: c.surfaceElevated, color: c.text, borderColor: c.border }]}
+                    placeholder={f.label}
+                    placeholderTextColor={c.textTertiary}
+                    value={f.value}
+                    onChangeText={f.onSet}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType={f.type as any}
+                    textContentType={f.content as any}
+                    secureTextEntry={f.secure}
+                    editable={!isLoading}
+                  />
+                  {f.hint && <Text style={[styles.hint, { color: c.textTertiary }]}>{f.hint}</Text>}
+                </View>
+              ))}
             </View>
 
             <TouchableOpacity
-              style={[
-                styles.button,
-                { backgroundColor: colors.tint },
-                isLoading && styles.buttonDisabled,
-              ]}
+              style={[styles.cta, { backgroundColor: c.accent, opacity: isLoading ? 0.7 : 1 }]}
               onPress={handleRegister}
               disabled={isLoading}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              {isLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Create Account</Text>
-              )}
+              {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>Create Account</Text>}
             </TouchableOpacity>
           </View>
 
           {/* Footer */}
           <View style={styles.footer}>
-            <Text style={[styles.footerText, { color: colors.text, opacity: 0.7 }]}>
-              Already have an account?{' '}
-            </Text>
+            <Text style={[styles.footerText, { color: c.textSecondary }]}>Already have an account? </Text>
             <Link href="/(auth)/login" asChild>
               <TouchableOpacity disabled={isLoading}>
-                <Text style={[styles.linkText, { color: colors.tint }]}>
-                  Sign In
-                </Text>
+                <Text style={[styles.footerLink, { color: c.accent }]}>Sign In</Text>
               </TouchableOpacity>
             </Link>
           </View>
@@ -187,75 +98,30 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  container: { flex: 1 },
+  scroll: { flexGrow: 1 },
+  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48, gap: 28 },
+  brand: { alignItems: 'center', gap: 10 },
+  logoBox: { width: 72, height: 72, borderRadius: 22, justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#6C63FF', shadowOpacity: 0.4, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 8,
   },
-  scrollContent: {
-    flexGrow: 1,
+  logoEmoji: { fontSize: 36 },
+  logoTitle: { fontSize: 34, fontWeight: '800', letterSpacing: -1 },
+  logoSub: { fontSize: 15, fontWeight: '500' },
+  card: { borderRadius: 20, borderWidth: 1, padding: 24, gap: 20,
+    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 16, elevation: 3,
   },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 48,
+  cardTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
+  fields: { gap: 14 },
+  field: { gap: 6 },
+  label: { fontSize: 13, fontWeight: '600', letterSpacing: 0.2 },
+  input: { height: 50, borderRadius: 13, paddingHorizontal: 16, fontSize: 16, borderWidth: 1 },
+  hint: { fontSize: 12, fontWeight: '500' },
+  cta: { height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#6C63FF', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 5,
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 18,
-  },
-  form: {
-    gap: 16,
-  },
-  inputContainer: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  input: {
-    height: 50,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    fontSize: 16,
-  },
-  hint: {
-    fontSize: 12,
-    marginTop: -4,
-  },
-  button: {
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 32,
-  },
-  footerText: {
-    fontSize: 14,
-  },
-  linkText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  ctaText: { color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
+  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  footerText: { fontSize: 14, fontWeight: '500' },
+  footerLink: { fontSize: 14, fontWeight: '700' },
 });

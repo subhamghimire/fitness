@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
@@ -14,7 +15,8 @@ import { useAuthStore } from '@/store/auth.store';
 import { getAllWorkouts } from '@/db/queries';
 import { useColorScheme } from '@/components/useColorScheme';
 import { formatDate, formatDuration } from '@/utils/date';
-import Colors from '@/constants/Colors';
+import { WorkoutTimer } from '@/components/WorkoutTimer';
+import { C } from '@/constants/Colors';
 import type { Workout } from '@/types';
 
 export default function HomeScreen() {
@@ -22,7 +24,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const colors = Colors[colorScheme ?? 'light'];
+  const c = isDark ? C.dark : C.light;
 
   const { activeWorkout, startWorkout, loadActiveWorkout } = useWorkoutStore();
   const { user } = useAuthStore();
@@ -35,7 +37,7 @@ export default function HomeScreen() {
   const loadRecentWorkouts = async () => {
     try {
       const workouts = await getAllWorkouts();
-      setRecentWorkouts(workouts.slice(0, 5)); // Get last 5 workouts
+      setRecentWorkouts(workouts.slice(0, 5));
     } catch (error) {
       console.error('Failed to load recent workouts:', error);
     }
@@ -51,214 +53,131 @@ export default function HomeScreen() {
   };
 
   const handleContinueWorkout = () => {
-    if (activeWorkout) {
-      router.push(`/workout/${activeWorkout.id}`);
-    }
+    if (activeWorkout) router.push(`/workout/${activeWorkout.id}`);
   };
 
-  const getTotalSets = (workout: Workout): number => {
-    return workout.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
-  };
+  const getTotalSets = (w: Workout) => w.exercises.reduce((s, ex) => s + ex.sets.length, 0);
 
-  const getTotalVolume = (workout: Workout): number => {
-    return workout.exercises.reduce((sum, ex) => {
-      return sum + ex.sets.reduce((setSum, set) => {
-        const weight = set.weight ?? 0;
-        const reps = set.reps ?? 0;
-        return setSum + weight * reps;
-      }, 0);
-    }, 0);
-  };
+  const weekWorkouts = recentWorkouts.filter(w => {
+    const ago = new Date();
+    ago.setDate(ago.getDate() - 7);
+    return new Date(w.startedAt) > ago;
+  });
+
+  const displayName = user?.email?.split('@')[0] || 'Athlete';
 
   return (
     <ScrollView
-      style={[styles.container, { backgroundColor: isDark ? '#000' : '#f2f2f7' }]}
+      style={[styles.container, { backgroundColor: c.background }]}
       contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.greeting, { color: colors.text, opacity: 0.7 }]}>
-          Welcome back
-        </Text>
-        <Text style={[styles.userName, { color: colors.text }]}>
-          {user?.email?.split('@')[0] || 'Athlete'}
+      {/* Greeting */}
+      <View style={styles.greeting}>
+        <Text style={[styles.greetSub, { color: c.textSecondary }]}>Ready to train,</Text>
+        <Text style={[styles.greetName, { color: c.text }]} numberOfLines={1}>
+          {displayName} 👊
         </Text>
       </View>
 
-      {/* Active Workout Card */}
+      {/* Active workout banner */}
       {activeWorkout && (
         <TouchableOpacity
-          style={[styles.activeWorkoutCard, { backgroundColor: colors.tint }]}
+          style={[styles.activeBanner, { backgroundColor: c.accent }]}
           onPress={handleContinueWorkout}
-          activeOpacity={0.9}
+          activeOpacity={0.88}
         >
-          <View style={styles.activeWorkoutContent}>
-            <FontAwesome name="bolt" size={24} color="#fff" />
-            <View style={styles.activeWorkoutText}>
-              <Text style={styles.activeWorkoutTitle}>Workout in Progress</Text>
-              <Text style={styles.activeWorkoutSubtitle}>
-                {activeWorkout.exercises.length} exercise(s) • Tap to continue
-              </Text>
+          <View style={styles.activeBannerLeft}>
+            <View style={styles.pulsingDot} />
+            <View>
+              <Text style={styles.activeBannerTitle}>Workout in Progress</Text>
+              <WorkoutTimer startTime={activeWorkout.startedAt} textColor="rgba(255,255,255,0.75)" fontSize={13} />
             </View>
           </View>
-          <FontAwesome name="chevron-right" size={18} color="#fff" />
+          <View style={styles.activeBannerRight}>
+            <Text style={styles.activeBannerCta}>Continue</Text>
+            <FontAwesome name="chevron-right" size={14} color="#fff" />
+          </View>
         </TouchableOpacity>
       )}
 
-      {/* Start Workout Button */}
+      {/* Start Workout CTA */}
       {!activeWorkout && (
         <TouchableOpacity
-          style={[styles.startButton, { backgroundColor: colors.tint }]}
+          style={[styles.startBtn, { backgroundColor: c.accent }]}
           onPress={handleStartWorkout}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
-          <FontAwesome name="plus" size={20} color="#fff" />
-          <Text style={styles.startButtonText}>Start Workout</Text>
+          <View style={[styles.startBtnIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+            <FontAwesome name="plus" size={20} color="#fff" />
+          </View>
+          <Text style={styles.startBtnText}>Start Workout</Text>
         </TouchableOpacity>
       )}
 
-      {/* Quick Stats */}
-      <View style={styles.statsSection}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          This Week
-        </Text>
-        <View style={styles.statsGrid}>
-          <View
-            style={[styles.statCard, { backgroundColor: isDark ? '#1c1c1e' : '#fff' }]}
-          >
-            <Text style={[styles.statValue, { color: colors.tint }]}>
-              {recentWorkouts.filter(w => {
-                const weekAgo = new Date();
-                weekAgo.setDate(weekAgo.getDate() - 7);
-                return new Date(w.startedAt) > weekAgo;
-              }).length}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.text, opacity: 0.6 }]}>
-              Workouts
-            </Text>
-          </View>
-          <View
-            style={[styles.statCard, { backgroundColor: isDark ? '#1c1c1e' : '#fff' }]}
-          >
-            <Text style={[styles.statValue, { color: colors.tint }]}>
-              {recentWorkouts
-                .filter(w => {
-                  const weekAgo = new Date();
-                  weekAgo.setDate(weekAgo.getDate() - 7);
-                  return new Date(w.startedAt) > weekAgo;
-                })
-                .reduce((sum, w) => sum + getTotalSets(w), 0)}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.text, opacity: 0.6 }]}>
-              Sets
-            </Text>
-          </View>
+      {/* Week stats */}
+      <View style={styles.statsRow}>
+        <View style={[styles.statCard, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <Text style={[styles.statValue, { color: c.accent }]}>{weekWorkouts.length}</Text>
+          <Text style={[styles.statLabel, { color: c.textSecondary }]}>This week</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <Text style={[styles.statValue, { color: c.accent }]}>
+            {weekWorkouts.reduce((s, w) => s + getTotalSets(w), 0)}
+          </Text>
+          <Text style={[styles.statLabel, { color: c.textSecondary }]}>Total sets</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <Text style={[styles.statValue, { color: c.accent }]}>{recentWorkouts.length}</Text>
+          <Text style={[styles.statLabel, { color: c.textSecondary }]}>All time</Text>
         </View>
       </View>
 
-      {/* Recent Workouts */}
-      <View style={styles.recentSection}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Recent Workouts
-        </Text>
+      {/* Recent workouts */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: c.text }]}>Recent</Text>
 
         {recentWorkouts.length === 0 ? (
-          <View
-            style={[styles.emptyCard, { backgroundColor: isDark ? '#1c1c1e' : '#fff' }]}
-          >
-            <FontAwesome
-              name="calendar-o"
-              size={32}
-              color={isDark ? '#3a3a3c' : '#c7c7cc'}
-            />
-            <Text style={[styles.emptyText, { color: colors.text, opacity: 0.6 }]}>
-              No workouts yet
-            </Text>
-            <Text style={[styles.emptySubtext, { color: colors.text, opacity: 0.4 }]}>
-              Start your first workout to see it here
+          <View style={[styles.emptyCard, { backgroundColor: c.surface, borderColor: c.border }]}>
+            <FontAwesome name="bolt" size={32} color={c.textTertiary} />
+            <Text style={[styles.emptyTitle, { color: c.text }]}>No workouts yet</Text>
+            <Text style={[styles.emptyBody, { color: c.textSecondary }]}>
+              Tap "Start Workout" to log your first session
             </Text>
           </View>
         ) : (
-          <View style={styles.workoutsList}>
-            {recentWorkouts.map((workout) => (
-              <View
-                key={workout.id}
-                style={[
-                  styles.workoutCard,
-                  { backgroundColor: isDark ? '#1c1c1e' : '#fff' },
-                ]}
-              >
-                <View style={styles.workoutCardHeader}>
-                  <Text style={[styles.workoutDate, { color: colors.text }]}>
-                    {formatDate(workout.startedAt)}
+          recentWorkouts.map((workout) => (
+            <View key={workout.id} style={[styles.workoutCard, { backgroundColor: c.surface, borderColor: c.border }]}>
+              <View style={styles.workoutCardHead}>
+                <Text style={[styles.workoutDate, { color: c.text }]}>{formatDate(workout.startedAt)}</Text>
+                <View style={[styles.badge, {
+                  backgroundColor: workout.status === 'synced' ? c.successSoft : c.surfaceElevated,
+                }]}>
+                  <Text style={[styles.badgeText, { color: workout.status === 'synced' ? c.success : c.textSecondary }]}>
+                    {workout.status === 'synced' ? '⬆ Synced' : '◉ Local'}
                   </Text>
-                  <View
-                    style={[
-                      styles.syncBadge,
-                      {
-                        backgroundColor:
-                          workout.status === 'synced'
-                            ? '#34c759'
-                            : isDark
-                            ? '#3a3a3c'
-                            : '#e5e5ea',
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.syncBadgeText,
-                        { color: workout.status === 'synced' ? '#fff' : colors.text },
-                      ]}
-                    >
-                      {workout.status === 'synced' ? 'Synced' : 'Local'}
-                    </Text>
-                  </View>
                 </View>
-
-                <View style={styles.workoutStats}>
-                  <View style={styles.workoutStat}>
-                    <Text style={[styles.workoutStatValue, { color: colors.text }]}>
-                      {workout.exercises.length}
-                    </Text>
-                    <Text
-                      style={[styles.workoutStatLabel, { color: colors.text, opacity: 0.6 }]}
-                    >
-                      Exercises
-                    </Text>
-                  </View>
-                  <View style={styles.workoutStat}>
-                    <Text style={[styles.workoutStatValue, { color: colors.text }]}>
-                      {getTotalSets(workout)}
-                    </Text>
-                    <Text
-                      style={[styles.workoutStatLabel, { color: colors.text, opacity: 0.6 }]}
-                    >
-                      Sets
-                    </Text>
-                  </View>
-                  <View style={styles.workoutStat}>
-                    <Text style={[styles.workoutStatValue, { color: colors.text }]}>
-                      {formatDuration(workout.startedAt, workout.endedAt)}
-                    </Text>
-                    <Text
-                      style={[styles.workoutStatLabel, { color: colors.text, opacity: 0.6 }]}
-                    >
-                      Duration
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Exercise names preview */}
-                <Text
-                  style={[styles.exercisePreview, { color: colors.text, opacity: 0.6 }]}
-                  numberOfLines={1}
-                >
-                  {workout.exercises.map((e) => e.name).join(' • ')}
+              </View>
+              <View style={styles.workoutMeta}>
+                <Text style={[styles.metaItem, { color: c.textSecondary }]}>
+                  {workout.exercises.length} exercises
+                </Text>
+                <Text style={[styles.metaDot, { color: c.textTertiary }]}>·</Text>
+                <Text style={[styles.metaItem, { color: c.textSecondary }]}>
+                  {getTotalSets(workout)} sets
+                </Text>
+                <Text style={[styles.metaDot, { color: c.textTertiary }]}>·</Text>
+                <Text style={[styles.metaItem, { color: c.textSecondary }]}>
+                  {formatDuration(workout.startedAt, workout.endedAt)}
                 </Text>
               </View>
-            ))}
-          </View>
+              {workout.exercises.length > 0 && (
+                <Text style={[styles.exerciseChips, { color: c.textSecondary }]} numberOfLines={1}>
+                  {workout.exercises.map(e => e.name).join('  ·  ')}
+                </Text>
+              )}
+            </View>
+          ))
         )}
       </View>
     </ScrollView>
@@ -266,147 +185,53 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  container: { flex: 1 },
+  content: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 },
+  greeting: { marginBottom: 28 },
+  greetSub: { fontSize: 15, fontWeight: '500', letterSpacing: 0.1, marginBottom: 4 },
+  greetName: { fontSize: 30, fontWeight: '800', letterSpacing: -0.8 },
+  activeBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderRadius: 16, paddingHorizontal: 18, paddingVertical: 16, marginBottom: 16,
+    shadowColor: '#6C63FF', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  content: {
-    padding: 16,
-    paddingBottom: 32,
+  activeBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  pulsingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.7)' },
+  activeBannerTitle: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  activeBannerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  activeBannerCta: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  startBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    borderRadius: 18, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 24,
+    shadowColor: '#6C63FF', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  header: {
-    marginBottom: 24,
-  },
-  greeting: {
-    fontSize: 14,
-  },
-  userName: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginTop: 4,
-  },
-  activeWorkoutCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  activeWorkoutContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  activeWorkoutText: {
-    gap: 2,
-  },
-  activeWorkoutTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  activeWorkoutSubtitle: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 13,
-  },
-  startButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 56,
-    borderRadius: 12,
-    marginBottom: 24,
-    gap: 8,
-  },
-  startButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  statsSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
+  startBtnIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  startBtnText: { color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
+  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
   statCard: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
+    flex: 1, alignItems: 'center', paddingVertical: 16, borderRadius: 14, borderWidth: 1,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
   },
-  statValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-  },
-  statLabel: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  recentSection: {
-    flex: 1,
-  },
+  statValue: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  statLabel: { fontSize: 11, fontWeight: '600', marginTop: 3, letterSpacing: 0.1 },
+  section: { gap: 10 },
+  sectionTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4, marginBottom: 4 },
   emptyCard: {
-    padding: 32,
-    borderRadius: 12,
-    alignItems: 'center',
-    gap: 8,
+    alignItems: 'center', paddingVertical: 40, borderRadius: 16, borderWidth: 1, gap: 10,
   },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginTop: 8,
+  emptyTitle: { fontSize: 17, fontWeight: '700' },
+  emptyBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: 24 },
+  workoutCard: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 8,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 1,
   },
-  emptySubtext: {
-    fontSize: 14,
-  },
-  workoutsList: {
-    gap: 12,
-  },
-  workoutCard: {
-    padding: 16,
-    borderRadius: 12,
-  },
-  workoutCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  workoutDate: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  syncBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  syncBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  workoutStats: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  workoutStat: {
-    flex: 1,
-  },
-  workoutStatValue: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  workoutStatLabel: {
-    fontSize: 12,
-  },
-  exercisePreview: {
-    fontSize: 13,
-  },
+  workoutCardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  workoutDate: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  badge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
+  workoutMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaItem: { fontSize: 13, fontWeight: '500' },
+  metaDot: { fontSize: 13 },
+  exerciseChips: { fontSize: 12, fontWeight: '500', letterSpacing: 0.1 },
 });
