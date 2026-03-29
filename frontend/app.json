@@ -1,11 +1,11 @@
 {
   "expo": {
     "name": "Fitness",
-    "slug": "fitness",
+    "slug": "jgv",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "fitness",
+    "scheme": "jgv",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash-icon.png",
