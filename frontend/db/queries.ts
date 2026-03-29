@@ -24,6 +24,10 @@ export async function getCompletedUnsyncedWorkouts(): Promise<Workout[]> {
   const rows = await getDatabase().getAllAsync<WorkoutLocal>(`SELECT * FROM workouts_local WHERE status = 'completed' AND last_synced_at IS NULL`);
   return Promise.all(rows.map(buildFullWorkout));
 }
+export async function getWorkoutById(id: string): Promise<Workout | null> {
+  const row = await getDatabase().getFirstAsync<WorkoutLocal>(`SELECT * FROM workouts_local WHERE id = ?`, [id]);
+  return row ? buildFullWorkout(row) : null;
+}
 export async function getAllWorkouts(): Promise<Workout[]> {
   const rows = await getDatabase().getAllAsync<WorkoutLocal>(`SELECT * FROM workouts_local WHERE status != 'active' ORDER BY started_at DESC`);
   return Promise.all(rows.map(buildFullWorkout));
