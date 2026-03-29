@@ -1,28 +1,35 @@
 const palette = {
   // Brand
-  accent: '#6C63FF',
-  accentSoft: 'rgba(108,99,255,0.15)',
-  accentMid: 'rgba(108,99,255,0.25)',
+  accent: '#5E5CE6', // Futuristic rich purple/blue
+  accentSoft: 'rgba(94, 92, 230, 0.15)',
+  accentMid: 'rgba(94, 92, 230, 0.25)',
 
   // Semantic
-  success: '#30D158',
-  successSoft: 'rgba(48,209,88,0.15)',
-  danger: '#FF453A',
-  dangerSoft: 'rgba(255,69,58,0.12)',
-  warning: '#FF9F0A',
-  warningSoft: 'rgba(255,159,10,0.15)',
+  success: '#32D74B', // Vibrant green
+  successSoft: 'rgba(50, 215, 75, 0.15)',
+  danger: '#FF453A', // Failure set red
+  dangerSoft: 'rgba(255, 69, 58, 0.15)',
+  warning: '#FF9F0A', // General warning orange
+  warningSoft: 'rgba(255, 159, 10, 0.15)',
+  
+  // Set Types
+  dropSet: '#BF5AF2', // Drop set purple
+  dropSetSoft: 'rgba(191, 90, 242, 0.15)',
+  warmup: '#0A84FF', // Warm-up blue
+  warmupSoft: 'rgba(10, 132, 255, 0.15)',
 };
 
 export const C = {
   dark: {
-    background: '#0A0A0F',
-    surface: '#141418',
-    surfaceElevated: '#1E1E26',
-    border: '#2A2A36',
+    background: '#0F1115',
+    surface: '#1A1C23',
+    surfaceElevated: '#252731',
+    border: '#2E303B',
     tint: palette.accent,
     text: '#FFFFFF',
-    textSecondary: '#8E8EA0',
+    textSecondary: '#8E8EA0', // Strong clean grey
     textTertiary: '#48485A',
+    textGhost: '#343442',
     tabIconDefault: '#48485A',
     tabIconSelected: palette.accent,
     ...palette,
@@ -33,9 +40,10 @@ export const C = {
     surfaceElevated: '#EFEFFA',
     border: '#E5E5F0',
     tint: palette.accent,
-    text: '#0A0A0F',
+    text: '#0F1115',
     textSecondary: '#6B6B80',
     textTertiary: '#ADADC0',
+    textGhost: '#D1D1DF',
     tabIconDefault: '#ADADC0',
     tabIconSelected: palette.accent,
     ...palette,

@@ -1,9 +1,9 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, FlatList, StyleSheet, RefreshControl, TouchableOpacity,
+  View, Text, FlatList, StyleSheet, RefreshControl, TouchableOpacity, Alert
 } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { getAllWorkouts } from '@/db/queries';
 import { useColorScheme } from '@/components/useColorScheme';
 import { formatDate, formatDuration } from '@/utils/date';
@@ -18,7 +18,13 @@ export default function HistoryScreen() {
   const c = isDark ? C.dark : C.light;
 
   const loadWorkouts = async () => {
-    try { setWorkouts(await getAllWorkouts()); } catch (e) { console.error(e); }
+    try { 
+      const raw = await getAllWorkouts();
+      setWorkouts(raw); 
+    } catch (e) { 
+      Alert.alert('History Error', String(e));
+      console.error(e); 
+    }
   };
 
   useFocusEffect(useCallback(() => { loadWorkouts(); }, []));

@@ -33,7 +33,7 @@ export default function LoginScreen() {
           <View style={[styles.logoBox, { backgroundColor: c.accent }]}>
             <Text style={styles.logoEmoji}>⚡</Text>
           </View>
-          <Text style={[styles.logoTitle, { color: c.text }]}>FitTrack</Text>
+          <Text style={[styles.logoTitle, { color: c.text }]}>Fitness</Text>
           <Text style={[styles.logoSub, { color: c.textSecondary }]}>Your personal workout journal</Text>
         </View>
 

@@ -51,7 +51,7 @@ class SyncService {
     } finally { this.isSyncing = false; }
   }
   private buildPayload(w: Workout): SyncPayload {
-    return { workout: { id: w.id, startedAt: w.startedAt, endedAt: w.endedAt, exercises: w.exercises.map(ex => ({ id: ex.id, name: ex.name, orderIndex: ex.orderIndex, sets: ex.sets.map(s => ({ id: s.id, weight: s.weight, reps: s.reps, rpe: s.rpe, isWarmup: s.isWarmup })) })) } };
+    return { workout: { id: w.id, startedAt: w.startedAt, endedAt: w.endedAt, exercises: w.exercises.map(ex => ({ id: ex.id, name: ex.name, orderIndex: ex.orderIndex, notes: ex.notes, sets: ex.sets.map(s => ({ id: s.id, weight: s.weight, reps: s.reps, isWarmup: s.isWarmup, isDropset: s.isDropset, isFailure: s.isFailure })) })) } };
   }
   getSyncStatus() { return { isSyncing: this.isSyncing, isConnected: this.isConnected }; }
 }

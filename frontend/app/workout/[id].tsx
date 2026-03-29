@@ -8,6 +8,7 @@ import { useWorkoutStore } from '@/store/workout.store';
 import { useColorScheme } from '@/components/useColorScheme';
 import { WorkoutTimer } from '@/components/WorkoutTimer';
 import { ExerciseCard } from '@/components/ExerciseCard';
+import { FloatingRestTimer } from '@/components/FloatingRestTimer';
 import { syncService } from '@/sync/sync.service';
 import { C } from '@/constants/Colors';
 
@@ -17,7 +18,7 @@ export default function ActiveWorkoutScreen() {
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
 
-  const { activeWorkout, isLoading, loadActiveWorkout, addSet, updateSet, removeSet, toggleWarmup, removeExercise, endWorkout, cancelWorkout } = useWorkoutStore();
+  const { activeWorkout, isLoading, previousSets, loadActiveWorkout, addSet, updateSet, removeSet, cycleSetType, removeExercise, updateExercise, endWorkout, cancelWorkout } = useWorkoutStore();
 
   useEffect(() => { loadActiveWorkout(); }, []);
 
@@ -71,6 +72,7 @@ export default function ActiveWorkoutScreen() {
     <>
       <Stack.Screen
         options={{
+          headerTitleAlign: 'center',
           title: '',
           headerStyle: { backgroundColor: c.surface },
           headerShadowVisible: false,
@@ -109,10 +111,12 @@ export default function ActiveWorkoutScreen() {
             <ExerciseCard
               key={exercise.id}
               exercise={exercise}
+              previousSets={previousSets[exercise.id]}
               onAddSet={() => addSet(exercise.id)}
               onUpdateSet={updateSet}
               onDeleteSet={removeSet}
-              onToggleWarmup={toggleWarmup}
+              onCycleSetType={cycleSetType}
+              onUpdateNotes={(text) => updateExercise(exercise.id, { notes: text })}
               onDeleteExercise={() => handleDelete(exercise.id, exercise.name)}
               isDark={isDark}
             />
@@ -140,6 +144,8 @@ export default function ActiveWorkoutScreen() {
             <Text style={styles.addExText}>Add Exercise</Text>
           </TouchableOpacity>
         </View>
+
+        <FloatingRestTimer />
       </View>
     </>
   );
@@ -151,28 +157,28 @@ const styles = StyleSheet.create({
   noWorkoutText: { fontSize: 18, fontWeight: '600' },
   backBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
   backBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  headerBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10 },
-  headerBtnText: { fontSize: 14, fontWeight: '700' },
+  headerBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  headerBtnText: { fontSize: 15, fontWeight: '700' },
   timerContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  timerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#30D158' },
+  timerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#32D74B' }, // updated vibrant green
   scroll: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 110 },
-  setCount: { fontSize: 13, fontWeight: '600', marginBottom: 12, letterSpacing: 0.2 },
+  setCount: { fontSize: 14, fontWeight: '700', marginBottom: 16, letterSpacing: 0.2, textTransform: 'uppercase' }, // modern smallcaps
   emptyExercise: {
-    alignItems: 'center', paddingVertical: 48, borderRadius: 16, borderWidth: 1,
-    borderStyle: 'dashed', gap: 10, marginTop: 8,
+    alignItems: 'center', paddingVertical: 50, borderRadius: 20, borderWidth: 1,
+    borderStyle: 'dashed', gap: 12, marginTop: 8,
   },
-  emptyExerciseTitle: { fontSize: 17, fontWeight: '700' },
-  emptyExerciseBody: { fontSize: 14, textAlign: 'center', paddingHorizontal: 32 },
+  emptyExerciseTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
+  emptyExerciseBody: { fontSize: 15, textAlign: 'center', paddingHorizontal: 32 },
   bottomBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 20, paddingBottom: 34, paddingTop: 14, borderTopWidth: 1,
+    paddingHorizontal: 20, paddingBottom: 34, paddingTop: 16, borderTopWidth: 1,
   },
   addExBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    height: 52, borderRadius: 14, gap: 10,
-    shadowColor: '#6C63FF', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
+    height: 56, borderRadius: 16, gap: 12, // slightly larger, rounder
+    shadowColor: '#5E5CE6', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
-  addExText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  addExText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
 });

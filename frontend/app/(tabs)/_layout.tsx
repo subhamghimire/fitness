@@ -56,7 +56,14 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <TabIcon name="home" color={color} />,
-          headerTitle: 'FitTrack',
+          headerTitle: 'Fitness',
+        }}
+      />
+      <Tabs.Screen
+        name="templates"
+        options={{
+          title: 'Templates',
+          tabBarIcon: ({ color }) => <TabIcon name="clipboard" color={color} />,
         }}
       />
       <Tabs.Screen

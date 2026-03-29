@@ -1,62 +1,89 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { FontAwesome } from '@expo/vector-icons';
+import { View, Text, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
+import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { SetRow } from './SetRow';
 import { C } from '@/constants/Colors';
 import type { Exercise, SetData } from '@/types';
 
 interface Props {
   exercise: Exercise;
+  previousSets?: SetData[];
   onAddSet: () => void;
   onUpdateSet: (setId: string, data: Partial<Omit<SetData, 'id' | 'exerciseId'>>) => void;
   onDeleteSet: (setId: string) => void;
-  onToggleWarmup: (setId: string) => void;
+  onCycleSetType: (setId: string) => void;
   onDeleteExercise: () => void;
+  onUpdateNotes?: (notes: string) => void;
   isDark?: boolean;
 }
 
 export function ExerciseCard({
-  exercise, onAddSet, onUpdateSet, onDeleteSet, onToggleWarmup, onDeleteExercise, isDark = false,
+  exercise, previousSets, onAddSet, onUpdateSet, onDeleteSet, onCycleSetType, onDeleteExercise, onUpdateNotes, isDark = false,
 }: Props) {
   const c = isDark ? C.dark : C.light;
   let workingSetCount = 0;
+
+  const [isNotesExpanded, setIsNotesExpanded] = React.useState(!!exercise.notes);
+  const [notesText, setNotesText] = React.useState(exercise.notes ?? '');
 
   return (
     <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={[styles.accentDot, { backgroundColor: c.accent }]} />
-          <Text style={[styles.exerciseName, { color: c.text }]} numberOfLines={1}>
+          <Text style={[styles.exerciseName, { color: c.text }]} numberOfLines={2}>
             {exercise.name}
           </Text>
         </View>
-        <TouchableOpacity onPress={onDeleteExercise} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={[styles.deleteBtn, { backgroundColor: c.dangerSoft }]}>
-          <FontAwesome name="times" size={14} color={c.danger} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => setIsNotesExpanded(!isNotesExpanded)} style={[styles.iconBtn, isNotesExpanded ? { backgroundColor: c.accentSoft } : null]} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="document-text-outline" size={20} color={isNotesExpanded ? c.accent : c.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onDeleteExercise} style={styles.iconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="ellipsis-horizontal" size={20} color={c.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
+      {/* Notes Section */}
+      {isNotesExpanded && (
+        <View style={[styles.notesWrap, { backgroundColor: c.background }]}>
+          <TextInput
+            style={[styles.notesInput, { color: c.text }]}
+            placeholder="Add exercise notes..."
+            placeholderTextColor={c.textTertiary}
+            multiline
+            value={notesText}
+            onChangeText={setNotesText}
+            onBlur={() => onUpdateNotes?.(notesText)}
+          />
+        </View>
+      )}
+
       {/* Column Headers */}
-      <View style={[styles.colHeaders, { borderColor: c.border }]}>
+      <View style={styles.colHeaders}>
         <Text style={[styles.colLabel, styles.colSet, { color: c.textTertiary }]}>SET</Text>
+        <Text style={[styles.colLabel, styles.colPrev, { color: c.textTertiary }]}>PREVIOUS</Text>
         <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>KG</Text>
         <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>REPS</Text>
-        <Text style={[styles.colLabel, styles.colRpe, { color: c.textTertiary }]}>RPE</Text>
         <View style={styles.colAct} />
       </View>
 
       {/* Sets */}
       <View style={styles.sets}>
-        {exercise.sets.map((s) => {
-          if (!s.isWarmup) workingSetCount++;
+        {exercise.sets.map((s, index) => {
+          const isWorking = !s.isWarmup && !s.isDropset && !s.isFailure;
+          if (isWorking) workingSetCount++;
+          const prevSet = previousSets?.[index];
           return (
             <SetRow
               key={s.id}
               set={s}
-              setNumber={workingSetCount}
+              setNumber={isWorking ? workingSetCount : 0}
+              previousSet={prevSet}
               onUpdate={(d) => onUpdateSet(s.id, d)}
               onDelete={() => onDeleteSet(s.id)}
-              onToggleWarmup={() => onToggleWarmup(s.id)}
+              onCycleSetType={() => onCycleSetType(s.id)}
               isDark={isDark}
             />
           );
@@ -65,12 +92,14 @@ export function ExerciseCard({
 
       {/* Add Set */}
       <TouchableOpacity
-        style={[styles.addSetBtn, { borderColor: c.border, backgroundColor: c.accentSoft }]}
+        style={styles.addSetBtn}
         onPress={onAddSet}
-        activeOpacity={0.7}
+        activeOpacity={0.6}
       >
-        <FontAwesome name="plus" size={12} color={c.accent} />
-        <Text style={[styles.addSetText, { color: c.accent }]}>Add Set</Text>
+        <View style={[styles.addSetContent, { backgroundColor: c.accentSoft }]}>
+          <FontAwesome name="plus" size={13} color={c.accent} />
+          <Text style={[styles.addSetText, { color: c.accent }]}>Add Set</Text>
+        </View>
       </TouchableOpacity>
     </View>
   );
@@ -78,78 +107,84 @@ export function ExerciseCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    marginBottom: 14,
+    marginBottom: 20,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingTop: 18,
+    paddingBottom: 14,
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     flex: 1,
-    gap: 10,
-  },
-  accentDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    paddingRight: 10,
   },
   exerciseName: {
-    fontSize: 17,
-    fontWeight: '700',
-    flex: 1,
-    letterSpacing: -0.2,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
-  deleteBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  iconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  notesWrap: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    padding: 12,
+  },
+  notesInput: {
+    fontSize: 14,
+    fontWeight: '500',
+    minHeight: 40,
+  },
   colHeaders: {
     flexDirection: 'row',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    marginBottom: 4,
   },
   colLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.8,
     textAlign: 'center',
   },
-  colSet: { width: 44 },
-  colVal: { flex: 1 },
-  colRpe: { width: 56 },
-  colAct: { width: 36 },
+  colSet: { width: 32 },
+  colPrev: { width: 60, marginLeft: 12 },
+  colVal: { flex: 1, marginLeft: 12 },
+  colAct: { width: 40, marginLeft: 12 }, // matches check button width
   sets: {
-    paddingVertical: 4,
+    paddingBottom: 8,
   },
   addSetBtn: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  addSetContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 13,
-    gap: 7,
-    borderTopWidth: 1,
+    height: 44,
+    borderRadius: 12,
+    gap: 8,
   },
   addSetText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    letterSpacing: -0.1,
   },
 });

@@ -38,7 +38,7 @@ export default function RegisterScreen() {
             <View style={[styles.logoBox, { backgroundColor: c.accent }]}>
               <Text style={styles.logoEmoji}>⚡</Text>
             </View>
-            <Text style={[styles.logoTitle, { color: c.text }]}>FitTrack</Text>
+            <Text style={[styles.logoTitle, { color: c.text }]}>Fitness</Text>
             <Text style={[styles.logoSub, { color: c.textSecondary }]}>Create your account</Text>
           </View>
 

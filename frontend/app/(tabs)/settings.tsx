@@ -103,14 +103,13 @@ export default function SettingsScreen() {
       <Section title="ABOUT">
         <Row icon="info" iconBg="#5856D6" label="Version" value="1.0.0" />
         <View style={[styles.divider, { backgroundColor: c.border }]} />
-        <Row icon="code" iconBg="#007AFF" label="Architecture" value="Local-First" />
       </Section>
 
       <Section title="ACCOUNT">
         <Row icon="sign-out" iconBg={c.danger} label="Sign Out" onPress={handleLogout} danger />
       </Section>
 
-      <Text style={[styles.footer, { color: c.textTertiary }]}>FitTrack • Built with Expo + SQLite</Text>
+      <Text style={[styles.footer, { color: c.textTertiary }]}>Fitness • Built with Expo + SQLite</Text>
     </ScrollView>
   );
 }

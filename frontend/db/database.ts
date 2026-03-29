@@ -9,6 +9,13 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
   db = await SQLite.openDatabaseAsync(DATABASE_NAME);
   await db.execAsync('PRAGMA foreign_keys = ON;');
   for (const sql of ALL_TABLES_SQL) await db.execAsync(sql);
+
+  try { await db.execAsync("ALTER TABLE sets_local ADD COLUMN is_warmup INTEGER NOT NULL DEFAULT 0;"); } catch (e) {}
+  try { await db.execAsync("ALTER TABLE sets_local ADD COLUMN is_dropset INTEGER NOT NULL DEFAULT 0;"); } catch (e) {}
+  try { await db.execAsync("ALTER TABLE sets_local ADD COLUMN is_failure INTEGER NOT NULL DEFAULT 0;"); } catch (e) {}
+  try { await db.execAsync("ALTER TABLE sets_local ADD COLUMN is_completed INTEGER NOT NULL DEFAULT 0;"); } catch (e) {}
+  try { await db.execAsync("ALTER TABLE exercises_local ADD COLUMN notes TEXT;"); } catch (e) {}
+
   isInitialized = true;
   return db;
 }

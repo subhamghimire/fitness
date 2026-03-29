@@ -2,21 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Modal } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
-import { useTimerStore } from '@/store/timer.store';
 import { C } from '@/constants/Colors';
-import type { SetData } from '@/types';
+import type { TemplateSet } from '@/types';
 
 interface Props {
-  set: SetData;
+  set: TemplateSet;
   setNumber: number;
-  previousSet?: SetData;
-  onUpdate: (data: Partial<Omit<SetData, 'id' | 'exerciseId'>>) => void;
+  onUpdate: (data: Partial<Omit<TemplateSet, 'id' | 'templateExerciseId'>>) => void;
   onDelete: () => void;
-  onCycleSetType?: () => void; // Deprecated by local modal but kept for prop compat
+  onCycleSetType?: () => void;
   isDark?: boolean;
 }
 
-export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark = false }: Props) {
+export function TemplateSetRow({ set, setNumber, onUpdate, onDelete, isDark = false }: Props) {
   const [weight, setWeight] = useState(set.weight?.toString() ?? '');
   const [reps, setReps] = useState(set.reps?.toString() ?? '');
   const [showTypeSelector, setShowTypeSelector] = useState(false);
@@ -30,21 +28,11 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
 
   const handleWeight = (v: string) => { setWeight(v); const n = v ? parseFloat(v) : null; if (v === '' || !isNaN(n!)) onUpdate({ weight: n }); };
   const handleReps = (v: string) => { setReps(v); const n = v ? parseInt(v) : null; if (v === '' || !isNaN(n!)) onUpdate({ reps: n }); };
-  
-  const { startTimer } = useTimerStore();
-  const toggleComplete = () => {
-    const willComplete = !set.isCompleted;
-    onUpdate({ isCompleted: willComplete });
-    if (willComplete) startTimer(60); // Default 60s rest
-  };
 
-  // Interpret exact set type
   const isW = set.isWarmup;
   const isD = set.isDropset;
   const isF = set.isFailure;
-  const isN = !isW && !isD && !isF;
 
-  // Derive styling
   let badgeText = isW ? 'W' : (isD ? 'D' : (isF ? 'F' : setNumber.toString()));
   let badgeColor = c.surfaceElevated;
   let badgeTextColor = c.textSecondary;
@@ -53,15 +41,6 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
   if (isW) { badgeColor = c.warmupSoft; badgeTextColor = c.warmup; rowBg = c.warmupSoft; }
   else if (isD) { badgeColor = c.dropSetSoft; badgeTextColor = c.dropSet; rowBg = c.dropSetSoft; }
   else if (isF) { badgeColor = c.dangerSoft; badgeTextColor = c.danger; rowBg = c.dangerSoft; }
-
-  // Overrides if completed
-  if (set.isCompleted) {
-    rowBg = c.successSoft;
-  }
-
-  const prevTextStr = previousSet && previousSet.weight && previousSet.reps 
-    ? `${previousSet.weight}x${previousSet.reps}` 
-    : '–';
 
   const renderRightActions = (progress: any, dragX: any) => {
     const scale = dragX.interpolate({ inputRange: [-80, 0], outputRange: [1, 0.5], extrapolate: 'clamp' });
@@ -77,22 +56,13 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
   return (
     <Swipeable renderRightActions={renderRightActions} friction={2} rightThreshold={40} overshootRight={false}>
       <View style={[styles.row, { backgroundColor: rowBg }]}>
-        {/* Set Badge */}
         <TouchableOpacity style={[styles.badge, { backgroundColor: badgeColor }]} onPress={() => setShowTypeSelector(true)} activeOpacity={0.6}>
           <Text style={[styles.badgeText, { color: badgeTextColor }]}>{badgeText}</Text>
         </TouchableOpacity>
 
-        {/* Previous text (ghosted) */}
-        <View style={styles.prevWrap}>
-          <Text style={[styles.prevText, { color: c.textGhost }]} numberOfLines={1}>
-            {prevTextStr}
-          </Text>
-        </View>
-
-        {/* Inputs */}
         <View style={styles.inputWrap}>
           <TextInput
-            style={[styles.input, { backgroundColor: set.isCompleted ? 'transparent' : c.surfaceElevated, color: c.text }]}
+            style={[styles.input, { backgroundColor: c.surfaceElevated, color: c.text }]}
             value={weight}
             onChangeText={handleWeight}
             placeholder="KG"
@@ -104,7 +74,7 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
 
         <View style={styles.inputWrap}>
           <TextInput
-            style={[styles.input, { backgroundColor: set.isCompleted ? 'transparent' : c.surfaceElevated, color: c.text }]}
+            style={[styles.input, { backgroundColor: c.surfaceElevated, color: c.text }]}
             value={reps}
             onChangeText={handleReps}
             placeholder="Reps"
@@ -114,17 +84,9 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
           />
         </View>
 
-        {/* Checkmark Complete */}
-        <TouchableOpacity
-          style={[styles.checkBtn, { backgroundColor: set.isCompleted ? c.success : c.surfaceElevated }]}
-          onPress={toggleComplete}
-          activeOpacity={0.7}
-        >
-          <FontAwesome name="check" size={14} color={set.isCompleted ? '#fff' : c.textTertiary} />
-        </TouchableOpacity>
+        <View style={{ width: 40 }} />
       </View>
 
-      {/* Set Type Modal */}
       <Modal transparent visible={showTypeSelector} animationType="fade" onRequestClose={() => setShowTypeSelector(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowTypeSelector(false)}>
           <View style={[styles.modalContent, { backgroundColor: c.surfaceElevated }]}>
@@ -165,95 +127,24 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  badge: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  badgeText: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  prevWrap: {
-    width: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  prevText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  inputWrap: {
-    flex: 1,
-  },
-  input: {
-    height: 40,
-    borderRadius: 12,
-    textAlign: 'center',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  checkBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteWrap: {
-    width: 75,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 16, gap: 12 },
+  badge: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  badgeText: { fontSize: 14, fontWeight: '800' },
+  inputWrap: { flex: 1 },
+  input: { height: 40, borderRadius: 12, textAlign: 'center', fontSize: 16, fontWeight: '700' },
+  deleteWrap: { width: 75, justifyContent: 'center', alignItems: 'center' },
   modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24,
   },
   modalContent: {
-    width: '100%',
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 20,
-    elevation: 10,
+    width: '100%', borderRadius: 24, padding: 20, shadowColor: '#000', shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 10 }, shadowRadius: 20, elevation: 10,
   },
   modalTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 16,
-    textAlign: 'center',
+    fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5,
+    marginBottom: 16, textAlign: 'center',
   },
-  modalOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    gap: 16,
-  },
-  modalIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalOptionText: {
-    fontSize: 17,
-    fontWeight: '600',
-  },
+  modalOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 16 },
+  modalIconWrap: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  modalOptionText: { fontSize: 17, fontWeight: '600' },
 });

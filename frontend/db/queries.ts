@@ -32,7 +32,15 @@ export async function markWorkoutAsSynced(id: string): Promise<void> {
   await getDatabase().runAsync(`UPDATE workouts_local SET status = 'synced', last_synced_at = ? WHERE id = ?`, [new Date().toISOString(), id]);
 }
 export async function insertExercise(e: ExerciseLocal): Promise<void> {
-  await getDatabase().runAsync(`INSERT INTO exercises_local (id, workout_id, name, order_index) VALUES (?, ?, ?, ?)`, [e.id, e.workout_id, e.name, e.order_index]);
+  await getDatabase().runAsync(`INSERT INTO exercises_local (id, workout_id, name, order_index, notes) VALUES (?, ?, ?, ?, ?)`, [e.id, e.workout_id, e.name, e.order_index, e.notes]);
+}
+export async function updateExercise(id: string, name: string, notes?: string | null): Promise<void> {
+  const db = getDatabase();
+  const fields = ['name = ?'];
+  const values = [name] as (string | null | number)[];
+  if (notes !== undefined) { fields.push('notes = ?'); values.push(notes); }
+  values.push(id as unknown as number);
+  await db.runAsync(`UPDATE exercises_local SET ${fields.join(', ')} WHERE id = ?`, values as any[]);
 }
 export async function deleteExercise(id: string): Promise<void> {
   const db = getDatabase();
@@ -44,15 +52,18 @@ export async function getNextExerciseOrderIndex(workoutId: string): Promise<numb
   return (r?.maxIndex ?? -1) + 1;
 }
 export async function insertSet(s: SetLocal): Promise<void> {
-  await getDatabase().runAsync(`INSERT INTO sets_local (id, exercise_id, weight, reps, rpe, is_warmup) VALUES (?, ?, ?, ?, ?, ?)`, [s.id, s.exercise_id, s.weight, s.reps, s.rpe, s.is_warmup]);
+  await getDatabase().runAsync(`INSERT INTO sets_local (id, exercise_id, weight, reps, is_warmup, is_dropset, is_failure, is_completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [s.id, s.exercise_id, s.weight, s.reps, s.is_warmup, s.is_dropset, s.is_failure, s.is_completed]);
 }
 export async function updateSet(id: string, data: Partial<SetLocal>): Promise<void> {
   const db = getDatabase();
   const fields: string[] = []; const values: (number | null)[] = [];
   if (data.weight !== undefined) { fields.push('weight = ?'); values.push(data.weight); }
   if (data.reps !== undefined) { fields.push('reps = ?'); values.push(data.reps); }
-  if (data.rpe !== undefined) { fields.push('rpe = ?'); values.push(data.rpe); }
+
   if (data.is_warmup !== undefined) { fields.push('is_warmup = ?'); values.push(data.is_warmup); }
+  if (data.is_dropset !== undefined) { fields.push('is_dropset = ?'); values.push(data.is_dropset); }
+  if (data.is_failure !== undefined) { fields.push('is_failure = ?'); values.push(data.is_failure); }
+  if (data.is_completed !== undefined) { fields.push('is_completed = ?'); values.push(data.is_completed); }
   if (fields.length === 0) return;
   values.push(id as unknown as number);
   await db.runAsync(`UPDATE sets_local SET ${fields.join(', ')} WHERE id = ?`, values as (number | null)[]);
@@ -60,11 +71,21 @@ export async function updateSet(id: string, data: Partial<SetLocal>): Promise<vo
 export async function deleteSet(id: string): Promise<void> { await getDatabase().runAsync('DELETE FROM sets_local WHERE id = ?', [id]); }
 async function getSetsForExercise(exerciseId: string): Promise<SetData[]> {
   const rows = await getDatabase().getAllAsync<SetLocal>('SELECT * FROM sets_local WHERE exercise_id = ?', [exerciseId]);
-  return rows.map(r => ({ id: r.id, exerciseId: r.exercise_id, weight: r.weight, reps: r.reps, rpe: r.rpe, isWarmup: r.is_warmup === 1 }));
+  return rows.map(r => ({ id: r.id, exerciseId: r.exercise_id, weight: r.weight, reps: r.reps, isWarmup: r.is_warmup === 1, isDropset: r.is_dropset === 1, isFailure: r.is_failure === 1, isCompleted: r.is_completed === 1 }));
+}
+export async function getPreviousExerciseSets(name: string, currentWorkoutId: string): Promise<SetData[]> {
+  const row = await getDatabase().getFirstAsync<{ id: string }>(`
+    SELECT e.id FROM exercises_local e
+    JOIN workouts_local w ON e.workout_id = w.id
+    WHERE e.name = ? AND w.id != ? AND (w.status = 'completed' OR w.status = 'synced')
+    ORDER BY w.started_at DESC LIMIT 1
+  `, [name, currentWorkoutId]);
+  if (!row) return [];
+  return await getSetsForExercise(row.id);
 }
 async function getExercisesForWorkout(workoutId: string): Promise<Exercise[]> {
   const rows = await getDatabase().getAllAsync<ExerciseLocal>('SELECT * FROM exercises_local WHERE workout_id = ? ORDER BY order_index', [workoutId]);
-  return Promise.all(rows.map(async r => ({ id: r.id, workoutId: r.workout_id, name: r.name, orderIndex: r.order_index, sets: await getSetsForExercise(r.id) })));
+  return Promise.all(rows.map(async r => ({ id: r.id, workoutId: r.workout_id, name: r.name, orderIndex: r.order_index, notes: r.notes, sets: await getSetsForExercise(r.id) })));
 }
 async function buildFullWorkout(row: WorkoutLocal): Promise<Workout> {
   return { id: row.id, status: row.status as 'active' | 'completed' | 'synced', startedAt: row.started_at, endedAt: row.ended_at, lastSyncedAt: row.last_synced_at, exercises: await getExercisesForWorkout(row.id) };

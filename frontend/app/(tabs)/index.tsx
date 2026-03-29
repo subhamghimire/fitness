@@ -76,7 +76,7 @@ export default function HomeScreen() {
       <View style={styles.greeting}>
         <Text style={[styles.greetSub, { color: c.textSecondary }]}>Ready to train,</Text>
         <Text style={[styles.greetName, { color: c.text }]} numberOfLines={1}>
-          {displayName} 👊
+          {displayName}
         </Text>
       </View>
 

@@ -6,6 +6,7 @@ import { WorkoutExercise } from '../workouts/entities/workout-exercise.entity';
 import { Set } from '../workouts/entities/set.entity';
 import { User } from '../users/entities/user.entity';
 import { SyncWorkoutDto } from './dto/sync-workout.dto';
+import { Exercise } from '../exercise/entities/exercise.entity';
 
 @Injectable()
 export class SyncService {
@@ -67,6 +68,22 @@ export class SyncService {
         })
         .orUpdate(['name', 'notes', 'started_at', 'ended_at', 'duration_seconds', 'updated_at'], ['id'])
         .execute();
+
+      // Resolve exercises
+      for (const ex of workout.exercises) {
+        if (!ex.exerciseId && ex.name) {
+          let exercise = await qr.manager.findOne(Exercise, { where: { title: ex.name } });
+          if (!exercise) {
+            const baseSlug = ex.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            const slug = `${baseSlug}-${Date.now().toString().slice(-6)}`;
+            exercise = qr.manager.create(Exercise, { title: ex.name, slug, description: 'Custom exercise created from app' });
+            await qr.manager.save(Exercise, exercise);
+          }
+          ex.exerciseId = exercise.id;
+        } else if (!ex.exerciseId) {
+          throw new Error('Either exerciseId or name must be provided for an exercise');
+        }
+      }
 
       // Insert workout exercises and sets
       if (workout.exercises && workout.exercises.length > 0) {

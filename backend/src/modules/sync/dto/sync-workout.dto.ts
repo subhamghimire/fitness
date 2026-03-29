@@ -1,4 +1,4 @@
-import { IsString, IsUUID, IsOptional, IsNumber, IsBoolean, IsArray, ValidateNested, IsDateString } from 'class-validator';
+import { IsString, IsUUID, IsOptional, ValidateIf, IsNumber, IsBoolean, IsArray, ValidateNested, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SyncSetDto {
@@ -46,8 +46,13 @@ export class SyncExerciseDto {
   @IsUUID()
   id: string;
 
+  @ValidateIf((o) => o.exerciseId !== undefined && o.exerciseId !== null && o.exerciseId !== '')
   @IsUUID()
-  exerciseId: string;
+  exerciseId?: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string | null;
 
   @IsNumber()
   orderIndex: number;
