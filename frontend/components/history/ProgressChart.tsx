@@ -31,10 +31,21 @@ export function ProgressChart({ data, colorHex }: Props) {
 
   const maxVal = Math.max(...data.map(d => d.value), 1);
   const CHART_HEIGHT = 120;
+  const gridSteps = 4;
+  const gridValues = Array.from({ length: gridSteps + 1 }, (_, idx) => Math.round((maxVal * idx) / gridSteps));
 
   return (
     <View style={styles.container}>
       <View style={styles.chartArea}>
+        <View style={styles.gridLayer}>
+          {gridValues.map((value, idx) => (
+            <View key={`${value}-${idx}`} style={styles.gridRow}>
+              <Text style={[styles.gridLabel, { color: c.textTertiary }]}>{value}</Text>
+              <View style={[styles.gridLine, { backgroundColor: c.border }]} />
+            </View>
+          ))}
+        </View>
+
         {data.map((d, i) => {
           const heightRatio = d.value / maxVal;
           const targetHeight = heightRatio * CHART_HEIGHT;
@@ -72,6 +83,28 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     paddingBottom: 24, // Space for labels
+  },
+  gridLayer: {
+    ...StyleSheet.absoluteFillObject,
+    bottom: 24,
+    top: 0,
+    left: 0,
+    right: 0,
+    justifyContent: 'space-between',
+  },
+  gridRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  gridLabel: {
+    width: 28,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  gridLine: {
+    flex: 1,
+    height: 1,
+    opacity: 0.45,
   },
   barWrap: {
     flex: 1,
