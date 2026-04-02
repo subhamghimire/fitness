@@ -1,25 +1,46 @@
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import type { Workout } from '@/types';
 import { formatDuration } from '@/utils/date';
 
 const CHANNEL_ID = 'active-workout';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
-});
+type NotificationsModule = typeof import('expo-notifications');
+
+let notificationsModule: NotificationsModule | null | undefined;
+
+function getNotificationsModule(): NotificationsModule | null {
+  if (notificationsModule !== undefined) return notificationsModule;
+  try {
+    // Lazy-load so app won't crash when native module is unavailable (e.g., Expo Go without rebuild).
+    notificationsModule = require('expo-notifications') as NotificationsModule;
+    notificationsModule.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      }),
+    });
+    return notificationsModule;
+  } catch {
+    notificationsModule = null;
+    return null;
+  }
+}
 
 class WorkoutNotificationService {
   private notificationId: string | null = null;
   private intervalId: NodeJS.Timeout | null = null;
   private permissionGranted = false;
+  private notificationsAvailable = true;
 
   private async ensurePermissions(): Promise<boolean> {
+    const Notifications = getNotificationsModule();
+    if (!Notifications) {
+      this.notificationsAvailable = false;
+      return false;
+    }
+
     if (this.permissionGranted) return true;
 
     const { status: existing } = await Notifications.getPermissionsAsync();
@@ -63,7 +84,7 @@ class WorkoutNotificationService {
 
   private currentUnit: 'kg' | 'lb' = 'kg';
 
-  private buildContent(workout: Workout, unit: 'kg' | 'lb'): Notifications.NotificationContentInput {
+  private buildContent(workout: Workout, unit: 'kg' | 'lb') {
     this.currentUnit = unit;
     const elapsed = formatDuration(workout.startedAt);
     const latest = this.getLatestCompletedSet(workout);
@@ -77,12 +98,16 @@ class WorkoutNotificationService {
       title,
       body,
       sound: false,
-      priority: Notifications.AndroidNotificationPriority.MIN,
       ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID, sticky: true } : {}),
     };
   }
 
   async update(workout: Workout, unit: 'kg' | 'lb'): Promise<void> {
+    const Notifications = getNotificationsModule();
+    if (!Notifications) {
+      this.notificationsAvailable = false;
+      return;
+    }
     const allowed = await this.ensurePermissions();
     if (!allowed) return;
 
@@ -101,6 +126,7 @@ class WorkoutNotificationService {
   }
 
   async start(workout: Workout, unit: 'kg' | 'lb'): Promise<void> {
+    if (!this.notificationsAvailable) return;
     await this.update(workout, unit);
 
     if (this.intervalId) clearInterval(this.intervalId);
@@ -110,12 +136,13 @@ class WorkoutNotificationService {
   }
 
   async stop(): Promise<void> {
+    const Notifications = getNotificationsModule();
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
 
-    if (this.notificationId) {
+    if (this.notificationId && Notifications) {
       try {
         await Notifications.dismissNotificationAsync(this.notificationId);
       } catch {
