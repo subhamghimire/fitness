@@ -55,6 +55,7 @@ export default function NewTemplateScreen() {
       <Stack.Screen
         options={{
           title: 'New Template',
+          headerTitleAlign: 'center',
           headerStyle: { backgroundColor: c.surface },
           headerShadowVisible: false,
           headerLeft: () => (

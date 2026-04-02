@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
+import { useUnitStore } from '@/store/unit.store';
 import { getWorkoutById } from '@/db/queries';
 import type { Workout } from '@/types';
 import { formatDate, formatDuration } from '@/utils/date';
@@ -15,6 +16,7 @@ export default function WorkoutDetailScreen() {
 
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
+  const unit = useUnitStore((state) => state.unit);
 
   useEffect(() => {
     if (typeof id === 'string') {
@@ -59,7 +61,7 @@ export default function WorkoutDetailScreen() {
             <View style={[styles.metaPill, { backgroundColor: c.surfaceElevated }]}>
               <FontAwesome name="bolt" size={12} color={c.warning || '#FF9F0A'} />
               <Text style={[styles.metaText, { color: c.text }]}>
-                {(totalVolume / 1000).toFixed(1)}k kg Volume
+                {(totalVolume / 1000).toFixed(1)}k {unit} Volume
               </Text>
             </View>
           </View>
@@ -82,7 +84,7 @@ export default function WorkoutDetailScreen() {
 
               <View style={styles.tableHeader}>
                 <Text style={[styles.thText, { flex: 1, color: c.textSecondary }]}>SET</Text>
-                <Text style={[styles.thText, { flex: 2, textAlign: 'center', color: c.textSecondary }]}>+KG</Text>
+                <Text style={[styles.thText, { flex: 2, textAlign: 'center', color: c.textSecondary }]}>+{unit.toUpperCase()}</Text>
                 <Text style={[styles.thText, { flex: 2, textAlign: 'center', color: c.textSecondary }]}>REPS</Text>
                 <View style={{ width: 24 }} />
               </View>

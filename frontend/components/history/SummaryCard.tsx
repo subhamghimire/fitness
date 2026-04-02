@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
@@ -10,15 +10,16 @@ interface Props {
   subValue?: string;
   icon: keyof typeof FontAwesome.glyphMap;
   colorHex?: string;
+  style?: ViewStyle;
 }
 
-export function SummaryCard({ title, value, subValue, icon, colorHex }: Props) {
+export function SummaryCard({ title, value, subValue, icon, colorHex, style }: Props) {
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
   const accentColor = colorHex || c.accent;
 
   return (
-    <View style={[styles.card, { backgroundColor: c.surfaceElevated }]}>
+    <View style={[styles.card, { backgroundColor: c.surfaceElevated }, style]}>
       <View style={styles.headerRow}>
         <View style={[styles.iconBox, { backgroundColor: accentColor + '20' }]}>
           <FontAwesome name={icon} size={14} color={accentColor} />
@@ -39,11 +40,9 @@ export function SummaryCard({ title, value, subValue, icon, colorHex }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    width: 140,
-    height: 100,
+    minHeight: 100,
     borderRadius: 20,
     padding: 16,
-    marginRight: 12,
     justifyContent: 'space-between',
   },
   headerRow: {

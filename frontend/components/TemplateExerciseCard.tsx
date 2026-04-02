@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { TemplateSetRow } from './TemplateSetRow';
 import { C } from '@/constants/Colors';
+import { useUnitStore } from '@/store/unit.store';
 import type { TemplateExercise, TemplateSet } from '@/types';
 
 interface Props {
@@ -19,6 +20,7 @@ export function TemplateExerciseCard({
   exercise, onAddSet, onUpdateSet, onDeleteSet, onCycleSetType, onDeleteExercise, isDark = false,
 }: Props) {
   const c = isDark ? C.dark : C.light;
+  const unit = useUnitStore((state) => state.unit);
   let workingSetCount = 0;
 
   return (
@@ -38,7 +40,8 @@ export function TemplateExerciseCard({
 
       <View style={styles.colHeaders}>
         <Text style={[styles.colLabel, styles.colSet, { color: c.textTertiary }]}>SET</Text>
-        <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>KG</Text>
+        <Text style={[styles.colLabel, styles.colPrev, { color: c.textTertiary }]}>PREVIOUS</Text>
+        <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>{unit.toUpperCase()}</Text>
         <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>REPS</Text>
         <View style={styles.colAct} />
       </View>
@@ -81,8 +84,9 @@ const styles = StyleSheet.create({
   colHeaders: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 4, marginBottom: 4 },
   colLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textAlign: 'center' },
   colSet: { width: 32 },
+  colPrev: { width: 60, marginLeft: 12 },
   colVal: { flex: 1, marginLeft: 12 },
-  colAct: { width: 40, marginLeft: 12 },
+  colAct: { width: 34, marginLeft: 12 },
   sets: { paddingBottom: 8 },
   addSetBtn: { paddingHorizontal: 16, paddingBottom: 16 },
   addSetContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 44, borderRadius: 12, gap: 8 },

@@ -1,15 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
-import { FontAwesome } from '@expo/vector-icons';
+import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/auth.store';
+import { useThemeStore, type ThemePreference } from '@/store/theme.store';
+import { useUnitStore, type WeightUnit } from '@/store/unit.store';
 import { syncService } from '@/sync/sync.service';
 import { getCompletedUnsyncedWorkouts } from '@/db/queries';
 import { resetDatabase } from '@/db/database';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
+
+const THEME_OPTIONS: { key: ThemePreference; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'system', label: 'System', icon: 'phone-portrait-outline' },
+  { key: 'light', label: 'Light', icon: 'sunny-outline' },
+  { key: 'dark', label: 'Dark', icon: 'moon-outline' },
+];
+
+const UNIT_OPTIONS: { key: WeightUnit; label: string }[] = [
+  { key: 'kg', label: 'Kilograms (kg)' },
+  { key: 'lb', label: 'Pounds (lb)' },
+];
 
 export default function SettingsScreen() {
   const [unsyncedCount, setUnsyncedCount] = useState(0);
@@ -18,122 +31,282 @@ export default function SettingsScreen() {
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
   const { user, logout } = useAuthStore();
+  const { mode, setMode } = useThemeStore();
+  const { unit, setUnit } = useUnitStore();
 
   useEffect(() => { loadCount(); }, []);
 
   const loadCount = async () => {
-    try { setUnsyncedCount((await getCompletedUnsyncedWorkouts()).length); } catch (e) { /* noop */ }
+    try {
+      setUnsyncedCount((await getCompletedUnsyncedWorkouts()).length);
+    } catch {
+      // noop
+    }
   };
 
   const handleSync = async () => {
     setIsSyncing(true);
     try {
       const r = await syncService.syncCompletedWorkouts();
-      Alert.alert(r.success ? 'Sync Complete' : 'Sync Failed',
-        r.success ? `Synced ${r.syncedWorkoutIds.length} workout(s)` : r.errors.join('\n'));
+      Alert.alert(
+        r.success ? 'Sync Complete' : 'Sync Failed',
+        r.success ? `Synced ${r.syncedWorkoutIds.length} workout(s)` : r.errors.join('\n')
+      );
       await loadCount();
-    } catch { Alert.alert('Error', 'Failed to sync'); }
-    finally { setIsSyncing(false); }
+    } catch {
+      Alert.alert('Error', 'Failed to sync');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleLogout = () => Alert.alert('Sign Out', 'Are you sure?', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Sign Out', style: 'destructive', onPress: async () => { await logout(); router.replace('/(auth)/login'); } },
+    {
+      text: 'Sign Out',
+      style: 'destructive',
+      onPress: async () => {
+        await logout();
+        router.replace('/(auth)/login');
+      },
+    },
   ]);
 
   const handleReset = () => Alert.alert('Reset All Data', 'This will delete all local workout data.', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Reset', style: 'destructive', onPress: async () => {
-      try { await resetDatabase(); Alert.alert('Done', 'All data cleared'); await loadCount(); }
-      catch { Alert.alert('Error', 'Failed to reset'); }
-    }},
+    {
+      text: 'Reset',
+      style: 'destructive',
+      onPress: async () => {
+        try {
+          await resetDatabase();
+          Alert.alert('Done', 'All data cleared');
+          await loadCount();
+        } catch {
+          Alert.alert('Error', 'Failed to reset');
+        }
+      },
+    },
   ]);
 
+  const username = useMemo(() => user?.email?.split('@')[0] ?? 'User', [user?.email]);
   const initials = (user?.email ?? 'U').slice(0, 1).toUpperCase();
 
-  const Row = ({ icon, iconBg, label, value, onPress, danger = false }: {
-    icon: string; iconBg: string; label: string; value?: string; onPress?: () => void; danger?: boolean;
+  const Stat = ({ label, value }: { label: string; value: string }) => (
+    <View style={styles.statItem}>
+      <Text style={[styles.statValue, { color: c.text }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: c.textSecondary }]}>{label}</Text>
+    </View>
+  );
+
+  const ActionRow = ({ icon, iconBg, label, value, onPress, danger = false }: {
+    icon: string;
+    iconBg: string;
+    label: string;
+    value?: string;
+    onPress?: () => void;
+    danger?: boolean;
   }) => (
-    <TouchableOpacity style={styles.row} onPress={onPress} disabled={!onPress} activeOpacity={0.7}>
-      <View style={[styles.iconBox, { backgroundColor: iconBg }]}>
+    <TouchableOpacity style={styles.actionRow} onPress={onPress} disabled={!onPress} activeOpacity={0.75}>
+      <View style={[styles.actionIcon, { backgroundColor: iconBg }]}> 
         <FontAwesome name={icon as any} size={15} color="#fff" />
       </View>
-      <Text style={[styles.rowLabel, { color: danger ? c.danger : c.text }]}>{label}</Text>
-      <View style={styles.rowRight}>
-        {value && <Text style={[styles.rowValue, { color: c.textSecondary }]}>{value}</Text>}
-        {onPress && <FontAwesome name="chevron-right" size={12} color={c.textTertiary} />}
+      <Text style={[styles.actionLabel, { color: danger ? c.danger : c.text }]}>{label}</Text>
+      <View style={styles.actionRight}>
+        {value ? <Text style={[styles.actionValue, { color: c.textSecondary }]}>{value}</Text> : null}
+        {onPress ? <FontAwesome name="chevron-right" size={12} color={c.textTertiary} /> : null}
       </View>
     </TouchableOpacity>
   );
 
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <View style={styles.section}>
-      <Text style={[styles.sectionLabel, { color: c.textSecondary }]}>{title}</Text>
-      <View style={[styles.sectionBox, { backgroundColor: c.surface, borderColor: c.border }]}>
-        {children}
-      </View>
-    </View>
-  );
-
   return (
-    <ScrollView style={[styles.container, { backgroundColor: c.background }]} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      {/* Avatar card */}
-      <View style={[styles.profileCard, { backgroundColor: c.surface, borderColor: c.border }]}>
-        <View style={[styles.avatar, { backgroundColor: c.accentMid }]}>
-          <Text style={[styles.avatarText, { color: c.accent }]}>{initials}</Text>
+    <ScrollView
+      style={[styles.container, { backgroundColor: c.background }]}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={[styles.profileCard, { backgroundColor: c.surface, borderColor: c.border }]}> 
+        <View style={[styles.avatar, { backgroundColor: c.surfaceElevated }]}> 
+          <Text style={[styles.avatarText, { color: c.text }]}>{initials}</Text>
         </View>
-        <View>
-          <Text style={[styles.profileName, { color: c.text }]}>{user?.email?.split('@')[0] ?? 'User'}</Text>
-          <Text style={[styles.profileEmail, { color: c.textSecondary }]}>{user?.email ?? ''}</Text>
+        <Text style={[styles.profileName, { color: c.text }]}>{username}</Text>
+        <Text style={[styles.profileEmail, { color: c.textSecondary }]}>{user?.email ?? ''}</Text>
+
+        <View style={[styles.statsRow, { borderTopColor: c.border }]}> 
+          <Stat label="Workouts" value="149" />
+          <Stat label="Volume" value="56.3K" />
+          <Stat label="Streak" value="12" />
         </View>
       </View>
 
-      <Section title="SYNC">
-        <Row icon="cloud" iconBg={c.success} label="Pending Syncs" value={`${unsyncedCount}`} />
+      <View style={[styles.themeCard, { backgroundColor: c.surface, borderColor: c.border }]}> 
+        <Text style={[styles.sectionLabel, { color: c.textSecondary }]}>Appearance</Text>
+        <View style={[styles.themeSegment, { backgroundColor: c.surfaceElevated }]}> 
+          {THEME_OPTIONS.map((opt) => {
+            const selected = mode === opt.key;
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                onPress={() => setMode(opt.key)}
+                style={[
+                  styles.themeOption,
+                  selected && { backgroundColor: c.background, borderColor: c.border, borderWidth: 1 },
+                ]}
+                activeOpacity={0.8}
+              >
+                <Ionicons name={opt.icon} size={15} color={selected ? c.accent : c.textSecondary} />
+                <Text style={[styles.themeOptionText, { color: selected ? c.text : c.textSecondary }]}>{opt.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={[styles.themeCard, { backgroundColor: c.surface, borderColor: c.border }]}> 
+        <Text style={[styles.sectionLabel, { color: c.textSecondary }]}>Weight Unit</Text>
+        <View style={[styles.unitList, { backgroundColor: c.surfaceElevated, borderColor: c.border }]}>
+          {UNIT_OPTIONS.map((opt) => {
+            const selected = unit === opt.key;
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                style={[styles.unitRow, selected && { backgroundColor: c.accentSoft }]}
+                onPress={() => setUnit(opt.key)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.unitRowText, { color: selected ? c.accent : c.text }]}>{opt.label}</Text>
+                {selected ? <Ionicons name="checkmark-circle" size={18} color={c.accent} /> : null}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={[styles.actionsCard, { backgroundColor: c.surface, borderColor: c.border }]}> 
+        <ActionRow
+          icon="refresh"
+          iconBg={c.accent}
+          label={isSyncing ? 'Syncing...' : 'Sync Now'}
+          value={`${unsyncedCount}`}
+          onPress={isSyncing ? undefined : handleSync}
+        />
         <View style={[styles.divider, { backgroundColor: c.border }]} />
-        <Row icon="refresh" iconBg={c.accent} label={isSyncing ? 'Syncing…' : 'Sync Now'} onPress={isSyncing ? undefined : handleSync} />
-      </Section>
-
-      <Section title="DATA">
-        <Row icon="database" iconBg={c.warning} label="Storage" value="Local SQLite" />
+        <ActionRow icon="trash" iconBg={c.danger} label="Reset All Data" onPress={handleReset} danger />
         <View style={[styles.divider, { backgroundColor: c.border }]} />
-        <Row icon="trash" iconBg={c.danger} label="Reset All Data" onPress={handleReset} danger />
-      </Section>
-
-      <Section title="ABOUT">
-        <Row icon="info" iconBg="#5856D6" label="Version" value="1.0.0" />
-        <View style={[styles.divider, { backgroundColor: c.border }]} />
-      </Section>
-
-      <Section title="ACCOUNT">
-        <Row icon="sign-out" iconBg={c.danger} label="Sign Out" onPress={handleLogout} danger />
-      </Section>
-
-      <Text style={[styles.footer, { color: c.textTertiary }]}>Fitness • Built with Expo + SQLite</Text>
+        <ActionRow icon="sign-out" iconBg={c.danger} label="Sign Out" onPress={handleLogout} danger />
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 20, paddingBottom: 48, gap: 20 },
+  content: { padding: 16, paddingBottom: 42, gap: 16 },
   profileCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 16,
-    padding: 20, borderRadius: 18, borderWidth: 1,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    alignItems: 'center',
   },
-  avatar: { width: 56, height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { fontSize: 24, fontWeight: '800' },
-  profileName: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
-  profileEmail: { fontSize: 13, marginTop: 2, fontWeight: '500' },
-  section: { gap: 6 },
-  sectionLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, marginLeft: 4 },
-  sectionBox: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 14 },
-  iconBox: { width: 32, height: 32, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
-  rowLabel: { flex: 1, fontSize: 15, fontWeight: '500' },
-  rowRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rowValue: { fontSize: 14, fontWeight: '500' },
-  divider: { height: 1, marginLeft: 62 },
-  footer: { textAlign: 'center', fontSize: 12, fontWeight: '500', marginTop: 8 },
+  avatar: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { fontSize: 30, fontWeight: '800' },
+  profileName: { fontSize: 22, fontWeight: '800', marginTop: 12, letterSpacing: -0.3 },
+  profileEmail: { fontSize: 14, marginTop: 4 },
+  statsRow: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+  },
+  statItem: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 18, fontWeight: '800' },
+  statLabel: { fontSize: 12, fontWeight: '500', marginTop: 2 },
+  themeCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    gap: 12,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  themeSegment: {
+    borderRadius: 14,
+    padding: 4,
+    flexDirection: 'row',
+    gap: 4,
+  },
+  themeOption: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  themeOptionText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  unitList: {
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  unitRow: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  unitRowText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionsCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  actionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  actionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionValue: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  divider: { height: 1, marginLeft: 58 },
 });

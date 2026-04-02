@@ -13,6 +13,25 @@ export interface PRData {
   maxVolumeString: string;
 }
 
+export interface DailyActivity {
+  date: string;
+  weekday: string;
+  workouts: number;
+  sets: number;
+  volume: number;
+  topExercise: string | null;
+  intensity: number;
+}
+
+export interface WeeklyWorkoutData {
+  label: string;
+  weekStart: string;
+  weekEnd: string;
+  workouts: number;
+  sets: number;
+  volume: number;
+}
+
 /**
  * Calculates high-level summary metrics.
  */
@@ -95,42 +114,128 @@ export function getSummaryMetrics(workouts: Workout[]): SummaryMetrics {
  * Intensity is calculated relative to maximum daily volume.
  */
 export function generateHeatmapData(workouts: Workout[]): Record<string, number> {
-  const dailyVolumes: Record<string, number> = {};
+  const heatmap: Record<string, number> = {};
+  const daily = getDailyActivity(workouts);
+  Object.entries(daily).forEach(([dateStr, activity]) => {
+    heatmap[dateStr] = activity.intensity;
+  });
+  return heatmap;
+}
+
+export function getDailyActivity(workouts: Workout[]): Record<string, DailyActivity> {
+  const bucket: Record<string, { workouts: number; sets: number; volume: number; exerciseCounts: Record<string, number> }> = {};
   let maxDailyVolume = 0;
 
-  workouts.forEach((w) => {
-    if (!w.startedAt) return;
-    const d = new Date(w.startedAt);
+  workouts.forEach((workout) => {
+    if (!workout.startedAt) return;
+    const d = new Date(workout.startedAt);
     const tzOffset = d.getTimezoneOffset() * 60000;
     const dateStr = new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
-    
-    let vol = 0;
-    w.exercises.forEach((ex) => {
-      ex.sets.forEach((s) => {
-        vol += (s.weight ?? 0) * (s.reps ?? 0);
+    if (!bucket[dateStr]) {
+      bucket[dateStr] = { workouts: 0, sets: 0, volume: 0, exerciseCounts: {} };
+    }
+
+    bucket[dateStr].workouts += 1;
+    workout.exercises.forEach((exercise) => {
+      bucket[dateStr].exerciseCounts[exercise.name] = (bucket[dateStr].exerciseCounts[exercise.name] || 0) + 1;
+      exercise.sets.forEach((set) => {
+        bucket[dateStr].sets += 1;
+        bucket[dateStr].volume += (set.weight ?? 0) * (set.reps ?? 0);
       });
     });
 
-    dailyVolumes[dateStr] = (dailyVolumes[dateStr] || 0) + vol;
-    if (dailyVolumes[dateStr] > maxDailyVolume) {
-      maxDailyVolume = dailyVolumes[dateStr];
-    }
+    if (bucket[dateStr].volume > maxDailyVolume) maxDailyVolume = bucket[dateStr].volume;
   });
 
-  const heatmap: Record<string, number> = {};
-  for (const [dateStr, vol] of Object.entries(dailyVolumes)) {
-    if (maxDailyVolume === 0) {
-      heatmap[dateStr] = 1;
+  const result: Record<string, DailyActivity> = {};
+  Object.entries(bucket).forEach(([date, value]) => {
+    const ratio = maxDailyVolume > 0 ? value.volume / maxDailyVolume : 0;
+    const intensity =
+      ratio > 0.75 ? 4 :
+      ratio > 0.4 ? 3 :
+      ratio > 0.1 ? 2 :
+      value.workouts > 0 ? 1 : 0;
+
+    const topExercise = Object.entries(value.exerciseCounts)
+      .sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+    result[date] = {
+      date,
+      weekday: new Date(`${date}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long' }),
+      workouts: value.workouts,
+      sets: value.sets,
+      volume: value.volume,
+      topExercise,
+      intensity,
+    };
+  });
+
+  return result;
+}
+
+export function getWeeklyWorkoutData(workouts: Workout[], weeksToShow = 8): WeeklyWorkoutData[] {
+  const weekBucket: Record<string, WeeklyWorkoutData> = {};
+  const today = new Date();
+
+  const getWeekStart = (date: Date) => {
+    const copy = new Date(date);
+    const day = copy.getDay();
+    const diff = day === 0 ? -6 : 1 - day; // Monday-based week
+    copy.setDate(copy.getDate() + diff);
+    copy.setHours(0, 0, 0, 0);
+    return copy;
+  };
+
+  workouts.forEach((workout) => {
+    const started = new Date(workout.startedAt);
+    const weekStart = getWeekStart(started);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+
+    const key = weekStart.toISOString().slice(0, 10);
+    if (!weekBucket[key]) {
+      weekBucket[key] = {
+        label: `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+        weekStart: key,
+        weekEnd: weekEnd.toISOString().slice(0, 10),
+        workouts: 0,
+        sets: 0,
+        volume: 0,
+      };
+    }
+
+    weekBucket[key].workouts += 1;
+    workout.exercises.forEach((exercise) => {
+      weekBucket[key].sets += exercise.sets.length;
+      exercise.sets.forEach((set) => {
+        weekBucket[key].volume += (set.weight ?? 0) * (set.reps ?? 0);
+      });
+    });
+  });
+
+  const thisWeekStart = getWeekStart(today);
+  const padded: WeeklyWorkoutData[] = [];
+  for (let i = weeksToShow - 1; i >= 0; i--) {
+    const weekStart = new Date(thisWeekStart);
+    weekStart.setDate(thisWeekStart.getDate() - i * 7);
+    const key = weekStart.toISOString().slice(0, 10);
+    if (weekBucket[key]) {
+      padded.push(weekBucket[key]);
     } else {
-      const ratio = vol / maxDailyVolume;
-      if (ratio > 0.75) heatmap[dateStr] = 4;
-      else if (ratio > 0.4) heatmap[dateStr] = 3;
-      else if (ratio > 0.1) heatmap[dateStr] = 2;
-      else heatmap[dateStr] = 1;
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      padded.push({
+        label: `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+        weekStart: key,
+        weekEnd: weekEnd.toISOString().slice(0, 10),
+        workouts: 0,
+        sets: 0,
+        volume: 0,
+      });
     }
   }
 
-  return heatmap;
+  return padded;
 }
 
 /**

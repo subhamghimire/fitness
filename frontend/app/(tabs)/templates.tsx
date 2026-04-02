@@ -1,12 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useWorkoutStore } from '@/store/workout.store';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
-import { getAllTemplates } from '@/db/templateQueries';
+import { getAllTemplates, deleteTemplate } from '@/db/templateQueries';
 import type { Template } from '@/types';
 
 export default function TemplatesScreen() {
@@ -46,6 +46,40 @@ export default function TemplatesScreen() {
     router.push(`/workout/${id}`);
   };
 
+  const handleTemplateOptions = (template: Template) => {
+    Alert.alert(template.name, 'Manage this template', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete Template',
+        style: 'destructive',
+        onPress: () => handleDeleteTemplate(template),
+      },
+    ]);
+  };
+
+  const handleDeleteTemplate = (template: Template) => {
+    Alert.alert(
+      'Delete Template',
+      `Delete "${template.name}" permanently?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteTemplate(template.id);
+              setTemplates((prev) => prev.filter((item) => item.id !== template.id));
+            } catch (error) {
+              Alert.alert('Delete Failed', 'Unable to delete this template.');
+              console.error(error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderTemplateCard = ({ item }: { item: Template }) => {
     const exCount = item.exercises.length;
     const exNames = item.exercises.slice(0, 3).map(e => e.name).join(', ') + (exCount > 3 ? '...' : '');
@@ -54,7 +88,7 @@ export default function TemplatesScreen() {
       <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
         <View style={styles.cardHeader}>
           <Text style={[styles.cardTitle, { color: c.text }]}>{item.name}</Text>
-          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => handleTemplateOptions(item)}>
             <Ionicons name="ellipsis-horizontal" size={20} color={c.textSecondary} />
           </TouchableOpacity>
         </View>

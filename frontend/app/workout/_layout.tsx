@@ -5,6 +5,7 @@ export default function WorkoutLayout() {
     <Stack
       screenOptions={{
         headerShown: true,
+        headerTitleAlign: 'center',
       }}
     >
       <Stack.Screen

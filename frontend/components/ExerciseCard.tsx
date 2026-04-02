@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, TextInput } from 'react-nativ
 import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { SetRow } from './SetRow';
 import { C } from '@/constants/Colors';
+import { useUnitStore } from '@/store/unit.store';
 import type { Exercise, SetData } from '@/types';
 
 interface Props {
@@ -21,6 +22,7 @@ export function ExerciseCard({
   exercise, previousSets, onAddSet, onUpdateSet, onDeleteSet, onCycleSetType, onDeleteExercise, onUpdateNotes, isDark = false,
 }: Props) {
   const c = isDark ? C.dark : C.light;
+  const unit = useUnitStore((state) => state.unit);
   let workingSetCount = 0;
 
   const [isNotesExpanded, setIsNotesExpanded] = React.useState(!!exercise.notes);
@@ -64,7 +66,7 @@ export function ExerciseCard({
       <View style={styles.colHeaders}>
         <Text style={[styles.colLabel, styles.colSet, { color: c.textTertiary }]}>SET</Text>
         <Text style={[styles.colLabel, styles.colPrev, { color: c.textTertiary }]}>PREVIOUS</Text>
-        <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>KG</Text>
+        <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>{unit.toUpperCase()}</Text>
         <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>REPS</Text>
         <View style={styles.colAct} />
       </View>
@@ -167,7 +169,7 @@ const styles = StyleSheet.create({
   colSet: { width: 32 },
   colPrev: { width: 60, marginLeft: 12 },
   colVal: { flex: 1, marginLeft: 12 },
-  colAct: { width: 40, marginLeft: 12 }, // matches check button width
+  colAct: { width: 34, marginLeft: 12 }, // matches check button width
   sets: {
     paddingBottom: 8,
   },

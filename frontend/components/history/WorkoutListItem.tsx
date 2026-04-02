@@ -4,6 +4,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
+import { useUnitStore } from '@/store/unit.store';
 import type { Workout } from '@/types';
 import { formatDate, formatDuration } from '@/utils/date';
 
@@ -15,6 +16,7 @@ interface Props {
 export function WorkoutListItem({ workout, onPress }: Props) {
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
+  const unit = useUnitStore((state) => state.unit);
 
   const totalSets = workout.exercises.reduce((acc, ex) => acc + ex.sets.length, 0);
   const totalVolume = workout.exercises.reduce(
@@ -52,7 +54,7 @@ export function WorkoutListItem({ workout, onPress }: Props) {
         </View>
         <View style={[styles.pill, { backgroundColor: c.surfaceElevated }]}>
           <FontAwesome name="bolt" size={10} color={c.warning || '#FF9F0A'} />
-          <Text style={[styles.pillText, { color: c.textSecondary }]}>{(totalVolume / 1000).toFixed(1)}k kg</Text>
+          <Text style={[styles.pillText, { color: c.textSecondary }]}>{(totalVolume / 1000).toFixed(1)}k {unit}</Text>
         </View>
       </View>
 

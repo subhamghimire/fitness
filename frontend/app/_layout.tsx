@@ -2,6 +2,8 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { initDatabase } from '@/db/database';
 import { useAuthStore } from '@/store/auth.store';
+import { useThemeStore } from '@/store/theme.store';
+import { useUnitStore } from '@/store/unit.store';
 import { useWorkoutStore } from '@/store/workout.store';
 import { syncService } from '@/sync/sync.service';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
@@ -19,6 +21,8 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   useEffect(() => {
     (async () => {
+      await useThemeStore.getState().initialize();
+      await useUnitStore.getState().initialize();
       await initDatabase();
       await useAuthStore.getState().initialize();
       await useWorkoutStore.getState().loadActiveWorkout();
@@ -54,7 +58,12 @@ function RootLayoutNav() {
   }, [isAuthenticated, isLoading, segments]);
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack><Stack.Screen name="(auth)" options={{ headerShown: false }} /><Stack.Screen name="(tabs)" options={{ headerShown: false }} /><Stack.Screen name="workout" options={{ headerShown: false }} /><Stack.Screen name="+not-found" /></Stack>
+      <Stack screenOptions={{ headerTitleAlign: 'center' }}>
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="workout" options={{ headerShown: false }} />
+        <Stack.Screen name="+not-found" />
+      </Stack>
     </ThemeProvider>
   );
 }

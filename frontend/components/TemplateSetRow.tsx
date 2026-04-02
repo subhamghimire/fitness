@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Modal } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Modal, Easing } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
 import { C } from '@/constants/Colors';
+import { useUnitStore } from '@/store/unit.store';
 import type { TemplateSet } from '@/types';
 
 interface Props {
@@ -18,8 +20,10 @@ export function TemplateSetRow({ set, setNumber, onUpdate, onDelete, isDark = fa
   const [weight, setWeight] = useState(set.weight?.toString() ?? '');
   const [reps, setReps] = useState(set.reps?.toString() ?? '');
   const [showTypeSelector, setShowTypeSelector] = useState(false);
+  const shake = useRef(new Animated.Value(0)).current;
 
   const c = isDark ? C.dark : C.light;
+  const unit = useUnitStore((state) => state.unit);
 
   useEffect(() => {
     setWeight(set.weight?.toString() ?? '');
@@ -28,6 +32,17 @@ export function TemplateSetRow({ set, setNumber, onUpdate, onDelete, isDark = fa
 
   const handleWeight = (v: string) => { setWeight(v); const n = v ? parseFloat(v) : null; if (v === '' || !isNaN(n!)) onUpdate({ weight: n }); };
   const handleReps = (v: string) => { setReps(v); const n = v ? parseInt(v) : null; if (v === '' || !isNaN(n!)) onUpdate({ reps: n }); };
+  const handleDisabledPreviousTap = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    shake.setValue(0);
+    Animated.sequence([
+      Animated.timing(shake, { toValue: -1, duration: 45, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 1, duration: 45, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -0.8, duration: 40, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 0.8, duration: 40, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 0, duration: 35, easing: Easing.linear, useNativeDriver: true }),
+    ]).start();
+  };
 
   const isW = set.isWarmup;
   const isD = set.isDropset;
@@ -60,12 +75,30 @@ export function TemplateSetRow({ set, setNumber, onUpdate, onDelete, isDark = fa
           <Text style={[styles.badgeText, { color: badgeTextColor }]}>{badgeText}</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity activeOpacity={1} onPress={handleDisabledPreviousTap}>
+          <Animated.View
+            style={[
+              styles.prevWrap,
+              {
+                transform: [{
+                  translateX: shake.interpolate({
+                    inputRange: [-1, 1],
+                    outputRange: [-6, 6],
+                  }),
+                }],
+              },
+            ]}
+          >
+            <Text style={[styles.prevText, { color: c.textGhost }]}>-</Text>
+          </Animated.View>
+        </TouchableOpacity>
+
         <View style={styles.inputWrap}>
           <TextInput
             style={[styles.input, { backgroundColor: c.surfaceElevated, color: c.text }]}
             value={weight}
             onChangeText={handleWeight}
-            placeholder="KG"
+            placeholder={unit.toUpperCase()}
             placeholderTextColor={c.textTertiary}
             keyboardType="decimal-pad"
             selectTextOnFocus
@@ -84,7 +117,7 @@ export function TemplateSetRow({ set, setNumber, onUpdate, onDelete, isDark = fa
           />
         </View>
 
-        <View style={{ width: 40 }} />
+        <View style={{ width: 34 }} />
       </View>
 
       <Modal transparent visible={showTypeSelector} animationType="fade" onRequestClose={() => setShowTypeSelector(false)}>
@@ -130,6 +163,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 16, gap: 12 },
   badge: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   badgeText: { fontSize: 14, fontWeight: '800' },
+  prevWrap: { width: 60, alignItems: 'center', justifyContent: 'center' },
+  prevText: { fontSize: 18, fontWeight: '600' },
   inputWrap: { flex: 1 },
   input: { height: 40, borderRadius: 12, textAlign: 'center', fontSize: 16, fontWeight: '700' },
   deleteWrap: { width: 75, justifyContent: 'center', alignItems: 'center' },

@@ -150,13 +150,11 @@ export default function HomeScreen() {
             <View key={workout.id} style={[styles.workoutCard, { backgroundColor: c.surface, borderColor: c.border }]}>
               <View style={styles.workoutCardHead}>
                 <Text style={[styles.workoutDate, { color: c.text }]}>{formatDate(workout.startedAt)}</Text>
-                <View style={[styles.badge, {
-                  backgroundColor: workout.status === 'synced' ? c.successSoft : c.surfaceElevated,
-                }]}>
-                  <Text style={[styles.badgeText, { color: workout.status === 'synced' ? c.success : c.textSecondary }]}>
-                    {workout.status === 'synced' ? '⬆ Synced' : '◉ Local'}
-                  </Text>
-                </View>
+                {workout.status === 'synced' ? (
+                  <View style={[styles.badge, { backgroundColor: c.successSoft }]}>
+                    <Text style={[styles.badgeText, { color: c.success }]}>⬆ Synced</Text>
+                  </View>
+                ) : null}
               </View>
               <View style={styles.workoutMeta}>
                 <Text style={[styles.metaItem, { color: c.textSecondary }]}>

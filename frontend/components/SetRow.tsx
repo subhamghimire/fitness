@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Modal } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useTimerStore } from '@/store/timer.store';
+import { useUnitStore } from '@/store/unit.store';
 import { C } from '@/constants/Colors';
 import type { SetData } from '@/types';
 
@@ -22,11 +23,22 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
   const [showTypeSelector, setShowTypeSelector] = useState(false);
 
   const c = isDark ? C.dark : C.light;
+  const unit = useUnitStore((state) => state.unit);
+  const completionAnim = useRef(new Animated.Value(set.isCompleted ? 1 : 0)).current;
 
   useEffect(() => {
     setWeight(set.weight?.toString() ?? '');
     setReps(set.reps?.toString() ?? '');
   }, [set.weight, set.reps]);
+
+  useEffect(() => {
+    Animated.spring(completionAnim, {
+      toValue: set.isCompleted ? 1 : 0,
+      speed: 22,
+      bounciness: 7,
+      useNativeDriver: true,
+    }).start();
+  }, [completionAnim, set.isCompleted]);
 
   const handleWeight = (v: string) => { setWeight(v); const n = v ? parseFloat(v) : null; if (v === '' || !isNaN(n!)) onUpdate({ weight: n }); };
   const handleReps = (v: string) => { setReps(v); const n = v ? parseInt(v) : null; if (v === '' || !isNaN(n!)) onUpdate({ reps: n }); };
@@ -63,6 +75,15 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
     ? `${previousSet.weight}x${previousSet.reps}` 
     : '–';
 
+  const checkScale = completionAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.72, 1],
+  });
+  const checkOpacity = completionAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.15, 1],
+  });
+
   const renderRightActions = (progress: any, dragX: any) => {
     const scale = dragX.interpolate({ inputRange: [-80, 0], outputRange: [1, 0.5], extrapolate: 'clamp' });
     return (
@@ -95,7 +116,7 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
             style={[styles.input, { backgroundColor: set.isCompleted ? 'transparent' : c.surfaceElevated, color: c.text }]}
             value={weight}
             onChangeText={handleWeight}
-            placeholder="KG"
+            placeholder={unit.toUpperCase()}
             placeholderTextColor={c.textTertiary}
             keyboardType="decimal-pad"
             selectTextOnFocus
@@ -120,7 +141,9 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
           onPress={toggleComplete}
           activeOpacity={0.7}
         >
-          <FontAwesome name="check" size={14} color={set.isCompleted ? '#fff' : c.textTertiary} />
+          <Animated.View style={{ transform: [{ scale: checkScale }], opacity: checkOpacity }}>
+            <FontAwesome name="check" size={12} color={set.isCompleted ? '#fff' : c.textTertiary} />
+          </Animated.View>
         </TouchableOpacity>
       </View>
 
@@ -203,9 +226,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   checkBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },

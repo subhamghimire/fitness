@@ -5,11 +5,13 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import { useWorkoutStore } from '@/store/workout.store';
+import { useUnitStore } from '@/store/unit.store';
 import { useColorScheme } from '@/components/useColorScheme';
 import { WorkoutTimer } from '@/components/WorkoutTimer';
 import { ExerciseCard } from '@/components/ExerciseCard';
 import { FloatingRestTimer } from '@/components/FloatingRestTimer';
 import { syncService } from '@/sync/sync.service';
+import { workoutNotificationService } from '@/services/workoutNotification.service';
 import { C } from '@/constants/Colors';
 
 export default function ActiveWorkoutScreen() {
@@ -17,10 +19,28 @@ export default function ActiveWorkoutScreen() {
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
+  const unit = useUnitStore((state) => state.unit);
 
   const { activeWorkout, isLoading, previousSets, loadActiveWorkout, addSet, updateSet, removeSet, cycleSetType, removeExercise, updateExercise, endWorkout, cancelWorkout } = useWorkoutStore();
 
   useEffect(() => { loadActiveWorkout(); }, []);
+
+  useEffect(() => {
+    if (!activeWorkout) {
+      workoutNotificationService.stop().catch(() => undefined);
+      return;
+    }
+    workoutNotificationService.start(activeWorkout, unit).catch(() => undefined);
+
+    return () => {
+      workoutNotificationService.stop().catch(() => undefined);
+    };
+  }, [activeWorkout?.id, unit]);
+
+  useEffect(() => {
+    if (!activeWorkout) return;
+    workoutNotificationService.update(activeWorkout, unit).catch(() => undefined);
+  }, [activeWorkout, unit]);
 
   const handleFinish = () => {
     if (!activeWorkout) return;
@@ -30,14 +50,14 @@ export default function ActiveWorkoutScreen() {
     }
     Alert.alert('Finish Workout', 'Ready to save this workout?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Finish', onPress: async () => { await endWorkout(); syncService.triggerSync(); router.replace('/(tabs)'); } },
+      { text: 'Finish', onPress: async () => { await workoutNotificationService.stop(); await endWorkout(); syncService.triggerSync(); router.replace('/(tabs)'); } },
     ]);
   };
 
   const handleCancel = () => {
     Alert.alert('Cancel Workout', 'Discard this workout entirely?', [
       { text: 'Keep Going', style: 'cancel' },
-      { text: 'Discard', style: 'destructive', onPress: async () => { await cancelWorkout(); router.replace('/(tabs)'); } },
+      { text: 'Discard', style: 'destructive', onPress: async () => { await workoutNotificationService.stop(); await cancelWorkout(); router.replace('/(tabs)'); } },
     ]);
   };
 

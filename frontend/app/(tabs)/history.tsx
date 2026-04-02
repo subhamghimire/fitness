@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useMemo } from 'react';
 import {
-  View, Text, FlatList, StyleSheet, RefreshControl, ScrollView, Alert, TouchableOpacity
+  View, Text, FlatList, StyleSheet, RefreshControl, Alert, TouchableOpacity, useWindowDimensions
 } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -8,20 +8,37 @@ import { useRouter } from 'expo-router';
 import { getAllWorkouts } from '@/db/queries';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
+import { useUnitStore } from '@/store/unit.store';
 import type { Workout } from '@/types';
-import { getSummaryMetrics, generateHeatmapData, getSmartInsights, getExerciseProgression } from '@/utils/analytics';
+import {
+  getSummaryMetrics,
+  generateHeatmapData,
+  getSmartInsights,
+  getExerciseProgression,
+  getDailyActivity,
+  getWeeklyWorkoutData,
+} from '@/utils/analytics';
 import { SummaryCard } from '@/components/history/SummaryCard';
 import { HeatmapCalendar } from '@/components/history/HeatmapCalendar';
 import { WorkoutListItem } from '@/components/history/WorkoutListItem';
 import { ProgressChart } from '@/components/history/ProgressChart';
+import { WeeklyWorkoutBars } from '@/components/history/WeeklyWorkoutBars';
 
 export default function HistoryScreen() {
   const router = useRouter();
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const { width } = useWindowDimensions();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const c = isDark ? C.dark : C.light;
+  const unit = useUnitStore((state) => state.unit);
+  const isCompact = width < 390;
+  const summaryCardWidth = useMemo(() => {
+    const horizontalPadding = 32;
+    const gutter = 12;
+    return Math.max(136, (width - horizontalPadding - gutter) / 2);
+  }, [width]);
 
   const loadWorkouts = async () => {
     try {
@@ -42,7 +59,9 @@ export default function HistoryScreen() {
   };
 
   const metrics = useMemo(() => getSummaryMetrics(workouts), [workouts]);
+  const dailyActivity = useMemo(() => getDailyActivity(workouts), [workouts]);
   const heatmap = useMemo(() => generateHeatmapData(workouts), [workouts]);
+  const weeklyWorkouts = useMemo(() => getWeeklyWorkoutData(workouts, 8), [workouts]);
   const insights = useMemo(() => getSmartInsights(workouts), [workouts]);
   
   const chartData = useMemo(() => {
@@ -62,35 +81,39 @@ export default function HistoryScreen() {
       <Text style={[styles.pageTitle, { color: c.text }]}>Progress Hub</Text>
       
       {/* Summary Cards */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.summaryScroll}>
+      <View style={styles.summaryGrid}>
         <SummaryCard 
           title="Total Workouts" 
           value={metrics.totalWorkouts.toString()} 
           icon="trophy" 
-          colorHex={c.accent} 
+          colorHex={c.accent}
+          style={{ width: summaryCardWidth }}
         />
         <SummaryCard 
           title="Total Volume" 
           value={`${(metrics.totalVolume / 1000).toFixed(1)}k`} 
-          subValue="kg"
+          subValue={unit}
           icon="bolt" 
-          colorHex={c.warning || '#FF9F0A'} 
+          colorHex={c.warning || '#FF9F0A'}
+          style={{ width: summaryCardWidth }}
         />
         <SummaryCard 
           title="Current Streak" 
           value={metrics.currentStreak.toString()} 
-          subValue="Days 🔥"
+          subValue={isCompact ? 'days' : 'Days'}
           icon="fire" 
-          colorHex="#FF453A" 
+          colorHex="#FF453A"
+          style={{ width: summaryCardWidth }}
         />
         <SummaryCard 
           title="Avg Duration" 
           value={`${Math.round(metrics.avgDuration / 60)}`} 
           subValue="mins"
           icon="clock-o" 
-          colorHex={c.success} 
+          colorHex={c.success}
+          style={{ width: summaryCardWidth }}
         />
-      </ScrollView>
+      </View>
 
       {/* Heatmap */}
       <View style={[styles.section, { backgroundColor: c.surface, borderColor: c.border }]}>
@@ -98,7 +121,15 @@ export default function HistoryScreen() {
           <FontAwesome name="calendar" size={16} color={c.textSecondary} />
           <Text style={[styles.sectionTitle, { color: c.text }]}>Consistency Map</Text>
         </View>
-        <HeatmapCalendar heatmapData={heatmap} weeksToShow={16} />
+        <HeatmapCalendar heatmapData={heatmap} activityByDate={dailyActivity} weightUnit={unit} weeksToShow={16} />
+      </View>
+
+      <View style={[styles.section, { backgroundColor: c.surface, borderColor: c.border, marginBottom: 16 }]}>
+        <View style={styles.sectionHeader}>
+          <FontAwesome name="bar-chart" size={16} color={c.textSecondary} />
+          <Text style={[styles.sectionTitle, { color: c.text }]}>Workouts Per Week</Text>
+        </View>
+        <WeeklyWorkoutBars data={weeklyWorkouts} weightUnit={unit} />
       </View>
 
       {/* Smart Insights */}
@@ -171,7 +202,13 @@ const styles = StyleSheet.create({
   listEmpty: { flex: 1, justifyContent: 'center', padding: 16 },
   headerContainer: { paddingBottom: 16 },
   pageTitle: { fontSize: 28, fontWeight: '800', marginHorizontal: 16, marginTop: 16, marginBottom: 20, letterSpacing: -0.5 },
-  summaryScroll: { paddingHorizontal: 16, gap: 12, paddingBottom: 24 },
+  summaryGrid: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
   section: {
     marginHorizontal: 16,
     borderRadius: 24,
