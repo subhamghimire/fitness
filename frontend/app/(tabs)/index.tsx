@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
@@ -111,7 +110,7 @@ export default function HomeScreen() {
           <View style={[styles.startBtnIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
             <FontAwesome name="plus" size={20} color="#fff" />
           </View>
-          <Text style={styles.startBtnText}>Start Workout</Text>
+          <Text style={styles.startBtnText}>Start Empty Workout</Text>
         </TouchableOpacity>
       )}
 
@@ -142,7 +141,7 @@ export default function HomeScreen() {
             <FontAwesome name="bolt" size={32} color={c.textTertiary} />
             <Text style={[styles.emptyTitle, { color: c.text }]}>No workouts yet</Text>
             <Text style={[styles.emptyBody, { color: c.textSecondary }]}>
-              Tap "Start Workout" to log your first session
+              Tap "Start Empty Workout" to log your first session
             </Text>
           </View>
         ) : (
@@ -184,15 +183,15 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 },
-  greeting: { marginBottom: 28 },
-  greetSub: { fontSize: 15, fontWeight: '500', letterSpacing: 0.1, marginBottom: 4 },
-  greetName: { fontSize: 30, fontWeight: '800', letterSpacing: -0.8 },
+  content: { paddingHorizontal: 20, paddingTop: 26, paddingBottom: 40 },
+  greeting: { marginBottom: 26 },
+  greetSub: { fontSize: 16, fontWeight: '600', letterSpacing: 0.16, marginBottom: 4 },
+  greetName: { fontSize: 36, fontWeight: '900', letterSpacing: -1.1, lineHeight: 40 },
   activeBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderRadius: 16, paddingHorizontal: 18, paddingVertical: 16, marginBottom: 16,
-    shadowColor: '#6C63FF', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    borderRadius: 18, paddingHorizontal: 18, paddingVertical: 16, marginBottom: 16,
+    shadowColor: '#6C63FF', shadowOpacity: 0.45, shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
   activeBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   pulsingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.7)' },
@@ -201,19 +200,19 @@ const styles = StyleSheet.create({
   activeBannerCta: { color: '#fff', fontSize: 14, fontWeight: '600' },
   startBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    borderRadius: 18, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 24,
-    shadowColor: '#6C63FF', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    borderRadius: 22, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 24,
+    shadowColor: '#6C63FF', shadowOpacity: 0.5, shadowRadius: 18, shadowOffset: { width: 0, height: 7 },
+    elevation: 10,
   },
-  startBtnIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  startBtnText: { color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
+  startBtnIcon: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  startBtnText: { color: '#fff', fontSize: 24, fontWeight: '900', letterSpacing: -0.75 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
   statCard: {
-    flex: 1, alignItems: 'center', paddingVertical: 16, borderRadius: 14, borderWidth: 1,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+    flex: 1, alignItems: 'center', paddingVertical: 18, borderRadius: 16, borderWidth: 1,
+    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3,
   },
-  statValue: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
-  statLabel: { fontSize: 11, fontWeight: '600', marginTop: 3, letterSpacing: 0.1 },
+  statValue: { fontSize: 30, fontWeight: '900', letterSpacing: -0.8 },
+  statLabel: { fontSize: 11, fontWeight: '700', marginTop: 4, letterSpacing: 0.36, textTransform: 'uppercase' },
   section: { gap: 10 },
   sectionTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4, marginBottom: 4 },
   emptyCard: {
