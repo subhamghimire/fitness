@@ -50,21 +50,55 @@ export default function ActiveWorkoutScreen() {
     }
     Alert.alert('Finish Workout', 'Ready to save this workout?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Finish', onPress: async () => { await workoutNotificationService.stop(); await endWorkout(); syncService.triggerSync(); router.replace('/(tabs)'); } },
+      {
+        text: 'Finish',
+        onPress: async () => {
+          try {
+            await workoutNotificationService.stop();
+            await endWorkout();
+            router.replace('/(tabs)');
+            // Fire-and-forget sync so a sync error can't block finishing workout.
+            try { syncService.triggerSync(); } catch { /* noop */ }
+          } catch (error) {
+            const message = error instanceof Error && error.message ? error.message : 'Please try again.';
+            Alert.alert('Could not finish workout', message);
+          }
+        },
+      },
     ]);
   };
 
   const handleCancel = () => {
     Alert.alert('Cancel Workout', 'Discard this workout entirely?', [
       { text: 'Keep Going', style: 'cancel' },
-      { text: 'Discard', style: 'destructive', onPress: async () => { await workoutNotificationService.stop(); await cancelWorkout(); router.replace('/(tabs)'); } },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await workoutNotificationService.stop();
+            await cancelWorkout();
+            router.replace('/(tabs)');
+          } catch {
+            Alert.alert('Could not discard workout', 'Please try again.');
+          }
+        },
+      },
     ]);
   };
 
-  const handleDelete = (exerciseId: string, name: string) => {
-    Alert.alert('Remove Exercise', `Remove "${name}"?`, [
+  const handleExerciseHistory = (exerciseId: string, name: string) => {
+    router.push({ pathname: '/workout/exercise-history', params: { exerciseId, name } });
+  };
+
+  const handleReplaceExercise = (exerciseId: string, name: string) => {
+    router.push({ pathname: '/workout/exercise-picker', params: { replaceExerciseId: exerciseId, currentName: name } });
+  };
+
+  const handleExerciseActions = (exerciseId: string, name: string) => {
+    Alert.alert(name, 'Choose an action', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => removeExercise(exerciseId) },
+      { text: 'Replace', onPress: () => handleReplaceExercise(exerciseId, name) },
     ]);
   };
 
@@ -137,7 +171,8 @@ export default function ActiveWorkoutScreen() {
               onDeleteSet={removeSet}
               onCycleSetType={cycleSetType}
               onUpdateNotes={(text) => updateExercise(exercise.id, { notes: text })}
-              onDeleteExercise={() => handleDelete(exercise.id, exercise.name)}
+              onOpenExerciseMenu={() => handleExerciseActions(exercise.id, exercise.name)}
+              onPressExerciseTitle={() => handleExerciseHistory(exercise.id, exercise.name)}
               isDark={isDark}
             />
           ))}

@@ -7,10 +7,18 @@ interface WorkoutState { activeWorkout: Workout | null; isLoading: boolean; prev
 export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   activeWorkout: null, isLoading: false, previousSets: {},
   loadActiveWorkout: async () => { 
-    set({ isLoading: true }); const w = await getActiveWorkout(); 
-    set({ activeWorkout: w, isLoading: false, previousSets: {} }); 
-    if (w) {
-      w.exercises.forEach(ex => get().loadPreviousSets(ex.id, ex.name));
+    set({ isLoading: true });
+    try {
+      const w = await getActiveWorkout();
+      set({ activeWorkout: w, previousSets: {} });
+      if (w) {
+        w.exercises.forEach(ex => get().loadPreviousSets(ex.id, ex.name));
+      }
+    } catch {
+      // Never keep UI stuck in loading if DB read fails transiently.
+      set({ activeWorkout: null, previousSets: {} });
+    } finally {
+      set({ isLoading: false });
     }
   },
   loadPreviousSets: async (exerciseId, name) => {
@@ -48,7 +56,27 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     exercises.forEach(ex => get().loadPreviousSets(ex.id, ex.name));
     return id;
   },
-  endWorkout: async () => { const { activeWorkout: w } = get(); if (!w) return; await updateWorkout(w.id, { status: 'completed', ended_at: getCurrentISOString() }); set({ activeWorkout: null }); },
+  endWorkout: async () => {
+    const { activeWorkout: w } = get();
+    if (!w) return;
+
+    const endedAt = getCurrentISOString();
+    let lastError: unknown = null;
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      try {
+        await updateWorkout(w.id, { status: 'completed', ended_at: endedAt });
+        set({ activeWorkout: null });
+        return;
+      } catch (error) {
+        lastError = error;
+        // Retry quickly for transient sqlite lock/busy states.
+        await new Promise((resolve) => setTimeout(resolve, 180 * (attempt + 1)));
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('Failed to finish workout');
+  },
   cancelWorkout: async () => { const { activeWorkout: w } = get(); if (!w) return; await deleteWorkout(w.id); set({ activeWorkout: null }); },
   addExercise: async (name) => {
     const { activeWorkout: w } = get(); if (!w) throw new Error('No active workout');

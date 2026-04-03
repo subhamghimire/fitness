@@ -13,13 +13,14 @@ interface Props {
   onUpdateSet: (setId: string, data: Partial<Omit<SetData, 'id' | 'exerciseId'>>) => void;
   onDeleteSet: (setId: string) => void;
   onCycleSetType: (setId: string) => void;
-  onDeleteExercise: () => void;
+  onOpenExerciseMenu: () => void;
+  onPressExerciseTitle?: () => void;
   onUpdateNotes?: (notes: string) => void;
   isDark?: boolean;
 }
 
 export function ExerciseCard({
-  exercise, previousSets, onAddSet, onUpdateSet, onDeleteSet, onCycleSetType, onDeleteExercise, onUpdateNotes, isDark = false,
+  exercise, previousSets, onAddSet, onUpdateSet, onDeleteSet, onCycleSetType, onOpenExerciseMenu, onPressExerciseTitle, onUpdateNotes, isDark = false,
 }: Props) {
   const c = isDark ? C.dark : C.light;
   const unit = useUnitStore((state) => state.unit);
@@ -33,15 +34,17 @@ export function ExerciseCard({
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={[styles.exerciseName, { color: c.text }]} numberOfLines={2}>
-            {exercise.name}
-          </Text>
+          <TouchableOpacity activeOpacity={0.7} onPress={onPressExerciseTitle}>
+            <Text style={[styles.exerciseName, { color: c.text }]} numberOfLines={2}>
+              {exercise.name}
+            </Text>
+          </TouchableOpacity>
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={() => setIsNotesExpanded(!isNotesExpanded)} style={[styles.iconBtn, isNotesExpanded ? { backgroundColor: c.accentSoft } : null]} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="document-text-outline" size={20} color={isNotesExpanded ? c.accent : c.textSecondary} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={onDeleteExercise} style={styles.iconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity onPress={onOpenExerciseMenu} style={styles.iconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="ellipsis-horizontal" size={20} color={c.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -68,7 +71,7 @@ export function ExerciseCard({
         <Text style={[styles.colLabel, styles.colPrev, { color: c.textTertiary }]}>PREVIOUS</Text>
         <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>{unit.toUpperCase()}</Text>
         <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>REPS</Text>
-        <View style={styles.colAct} />
+        <Text style={[styles.colLabel, styles.colActLabel, { color: c.textTertiary }]}>✓</Text>
       </View>
 
       {/* Sets */}
@@ -169,7 +172,8 @@ const styles = StyleSheet.create({
   colSet: { width: 32 },
   colPrev: { width: 60, marginLeft: 12 },
   colVal: { flex: 1, marginLeft: 12 },
-  colAct: { width: 34, marginLeft: 12 }, // matches check button width
+  colAct: { width: 38, marginLeft: 12 }, // matches check button width
+  colActLabel: { width: 38, marginLeft: 12, textAlign: 'center' },
   sets: {
     paddingBottom: 8,
   },

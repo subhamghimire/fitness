@@ -166,7 +166,15 @@ const styles = StyleSheet.create({
   prevWrap: { width: 60, alignItems: 'center', justifyContent: 'center' },
   prevText: { fontSize: 18, fontWeight: '600' },
   inputWrap: { flex: 1 },
-  input: { height: 40, borderRadius: 12, textAlign: 'center', fontSize: 16, fontWeight: '700' },
+  input: {
+    height: 40,
+    borderRadius: 12,
+    textAlign: 'left',
+    writingDirection: 'ltr',
+    paddingHorizontal: 12,
+    fontSize: 16,
+    fontWeight: '700',
+  },
   deleteWrap: { width: 75, justifyContent: 'center', alignItems: 'center' },
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24,

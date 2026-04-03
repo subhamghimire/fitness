@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import { useWorkoutStore } from '@/store/workout.store';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -20,16 +20,27 @@ const CATEGORIES: { label: string; icon: string; exercises: string[] }[] = [
 const ALL_EXERCISES = CATEGORIES.flatMap(c => c.exercises);
 
 export default function ExercisePickerScreen() {
+  const { replaceExerciseId, currentName } = useLocalSearchParams<{ replaceExerciseId?: string; currentName?: string }>();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [custom, setCustom] = useState('');
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
-  const { addExercise, addSet } = useWorkoutStore();
+  const { addExercise, addSet, updateExercise, loadPreviousSets } = useWorkoutStore();
+  const isReplaceMode = !!replaceExerciseId;
 
   const handleSelect = async (name: string) => {
-    try { const id = await addExercise(name); await addSet(id); router.back(); }
+    try {
+      if (replaceExerciseId) {
+        await updateExercise(replaceExerciseId, { name });
+        await loadPreviousSets(replaceExerciseId, name);
+      } else {
+        const id = await addExercise(name);
+        await addSet(id);
+      }
+      router.back();
+    }
     catch { Alert.alert('Error', 'Failed to add exercise'); }
   };
 
@@ -53,7 +64,7 @@ export default function ExercisePickerScreen() {
     <>
       <Stack.Screen
         options={{
-          title: 'Add Exercise',
+          title: isReplaceMode ? 'Replace Exercise' : 'Add Exercise',
           headerTitleAlign: 'center',
           headerStyle: { backgroundColor: c.surface },
           headerTitleStyle: { color: c.text, fontSize: 17, fontWeight: '700' },
@@ -63,7 +74,9 @@ export default function ExercisePickerScreen() {
               <Text style={{ color: c.danger, fontSize: 16, fontWeight: '600' }}>Cancel</Text>
             </TouchableOpacity>
           ),
-          headerRight: () => <View style={{ width: 54 }} />,
+          headerRight: () => (isReplaceMode
+            ? <Text style={{ color: c.textSecondary, fontSize: 13, fontWeight: '600' }}>Current: {currentName}</Text>
+            : <View style={{ width: 54 }} />),
         }}
       />
 

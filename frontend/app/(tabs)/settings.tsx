@@ -1,17 +1,19 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
 import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuthStore } from '@/store/auth.store';
 import { useThemeStore, type ThemePreference } from '@/store/theme.store';
 import { useUnitStore, type WeightUnit } from '@/store/unit.store';
 import { syncService } from '@/sync/sync.service';
-import { getCompletedUnsyncedWorkouts } from '@/db/queries';
+import { getAllWorkouts, getCompletedUnsyncedWorkouts } from '@/db/queries';
 import { resetDatabase } from '@/db/database';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
+import { getSummaryMetrics } from '@/utils/analytics';
 
 const THEME_OPTIONS: { key: ThemePreference; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'system', label: 'System', icon: 'phone-portrait-outline' },
@@ -26,6 +28,9 @@ const UNIT_OPTIONS: { key: WeightUnit; label: string }[] = [
 
 export default function SettingsScreen() {
   const [unsyncedCount, setUnsyncedCount] = useState(0);
+  const [totalWorkouts, setTotalWorkouts] = useState(0);
+  const [totalVolume, setTotalVolume] = useState(0);
+  const [currentStreak, setCurrentStreak] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
@@ -34,7 +39,28 @@ export default function SettingsScreen() {
   const { mode, setMode } = useThemeStore();
   const { unit, setUnit } = useUnitStore();
 
-  useEffect(() => { loadCount(); }, []);
+  const loadProfileStats = async () => {
+    try {
+      const workouts = await getAllWorkouts();
+      const metrics = getSummaryMetrics(workouts);
+      setTotalWorkouts(metrics.totalWorkouts);
+      setTotalVolume(metrics.totalVolume);
+      setCurrentStreak(metrics.currentStreak);
+    } catch {
+      setTotalWorkouts(0);
+      setTotalVolume(0);
+      setCurrentStreak(0);
+    }
+  };
+
+  useEffect(() => {
+    loadCount();
+    loadProfileStats();
+  }, []);
+  useFocusEffect(useCallback(() => {
+    loadCount();
+    loadProfileStats();
+  }, []));
 
   const loadCount = async () => {
     try {
@@ -91,6 +117,7 @@ export default function SettingsScreen() {
 
   const username = useMemo(() => user?.email?.split('@')[0] ?? 'User', [user?.email]);
   const initials = (user?.email ?? 'U').slice(0, 1).toUpperCase();
+  const volumeLabel = totalVolume >= 1000 ? `${(totalVolume / 1000).toFixed(1)}K` : `${Math.round(totalVolume)}`;
 
   const Stat = ({ label, value }: { label: string; value: string }) => (
     <View style={styles.statItem}>
@@ -133,9 +160,9 @@ export default function SettingsScreen() {
         <Text style={[styles.profileEmail, { color: c.textSecondary }]}>{user?.email ?? ''}</Text>
 
         <View style={[styles.statsRow, { borderTopColor: c.border }]}> 
-          <Stat label="Workouts" value="149" />
-          <Stat label="Volume" value="56.3K" />
-          <Stat label="Streak" value="12" />
+          <Stat label="Workouts" value={String(totalWorkouts)} />
+          <Stat label="Volume" value={volumeLabel} />
+          <Stat label="Streak" value={String(currentStreak)} />
         </View>
       </View>
 

@@ -22,6 +22,12 @@ export default function WorkoutLayout() {
           presentation: 'modal',
         }}
       />
+      <Stack.Screen
+        name="exercise-history"
+        options={{
+          title: 'Exercise History',
+        }}
+      />
     </Stack>
   );
 }

@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   startBtnIcon: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  startBtnText: { color: '#fff', fontSize: 24, fontWeight: '900', letterSpacing: -0.75 },
+  startBtnText: { color: '#fff', fontSize: 20, fontWeight: '900', letterSpacing: -0.4 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
   statCard: {
     flex: 1, alignItems: 'center', paddingVertical: 18, borderRadius: 16, borderWidth: 1,

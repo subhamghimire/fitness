@@ -21,10 +21,11 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
   const [weight, setWeight] = useState(set.weight?.toString() ?? '');
   const [reps, setReps] = useState(set.reps?.toString() ?? '');
   const [showTypeSelector, setShowTypeSelector] = useState(false);
+  const [completed, setCompleted] = useState(!!set.isCompleted);
 
   const c = isDark ? C.dark : C.light;
   const unit = useUnitStore((state) => state.unit);
-  const completionAnim = useRef(new Animated.Value(set.isCompleted ? 1 : 0)).current;
+  const completionAnim = useRef(new Animated.Value(completed ? 1 : 0)).current;
 
   useEffect(() => {
     setWeight(set.weight?.toString() ?? '');
@@ -32,20 +33,25 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
   }, [set.weight, set.reps]);
 
   useEffect(() => {
+    setCompleted(!!set.isCompleted);
+  }, [set.isCompleted]);
+
+  useEffect(() => {
     Animated.spring(completionAnim, {
-      toValue: set.isCompleted ? 1 : 0,
+      toValue: completed ? 1 : 0,
       speed: 22,
       bounciness: 7,
       useNativeDriver: true,
     }).start();
-  }, [completionAnim, set.isCompleted]);
+  }, [completionAnim, completed]);
 
   const handleWeight = (v: string) => { setWeight(v); const n = v ? parseFloat(v) : null; if (v === '' || !isNaN(n!)) onUpdate({ weight: n }); };
   const handleReps = (v: string) => { setReps(v); const n = v ? parseInt(v) : null; if (v === '' || !isNaN(n!)) onUpdate({ reps: n }); };
   
   const { startTimer } = useTimerStore();
   const toggleComplete = () => {
-    const willComplete = !set.isCompleted;
+    const willComplete = !completed;
+    setCompleted(willComplete);
     onUpdate({ isCompleted: willComplete });
     if (willComplete) startTimer(60); // Default 60s rest
   };
@@ -67,7 +73,7 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
   else if (isF) { badgeColor = c.dangerSoft; badgeTextColor = c.danger; rowBg = c.dangerSoft; }
 
   // Overrides if completed
-  if (set.isCompleted) {
+  if (completed) {
     rowBg = c.successSoft;
   }
 
@@ -77,19 +83,22 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
 
   const checkScale = completionAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.72, 1],
+    outputRange: [0.82, 1],
   });
   const checkOpacity = completionAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.15, 1],
+    outputRange: [0.5, 1],
   });
 
   const renderRightActions = (progress: any, dragX: any) => {
     const scale = dragX.interpolate({ inputRange: [-80, 0], outputRange: [1, 0.5], extrapolate: 'clamp' });
     return (
-      <TouchableOpacity onPress={onDelete} style={[styles.deleteWrap, { backgroundColor: c.danger }]}>
+      <TouchableOpacity onPress={onDelete} style={[styles.deleteWrap, { backgroundColor: c.dangerSoft }]}>
         <Animated.View style={{ transform: [{ scale }] }}>
-          <FontAwesome name="trash" size={18} color="#fff" />
+          <FontAwesome name="trash-o" size={16} color={c.danger} />
+        </Animated.View>
+        <Animated.View style={{ transform: [{ scale }] }}>
+          <Text style={[styles.deleteText, { color: c.danger }]}>Delete</Text>
         </Animated.View>
       </TouchableOpacity>
     );
@@ -103,9 +112,9 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
           <Text style={[styles.badgeText, { color: badgeTextColor }]}>{badgeText}</Text>
         </TouchableOpacity>
 
-        {/* Previous text (ghosted) */}
+        {/* Previous text */}
         <View style={styles.prevWrap}>
-          <Text style={[styles.prevText, { color: c.textGhost }]} numberOfLines={1}>
+          <Text style={[styles.prevText, { color: c.textTertiary }]} numberOfLines={1}>
             {prevTextStr}
           </Text>
         </View>
@@ -113,7 +122,7 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
         {/* Inputs */}
         <View style={styles.inputWrap}>
           <TextInput
-            style={[styles.input, { backgroundColor: set.isCompleted ? 'transparent' : c.surfaceElevated, color: c.text }]}
+            style={[styles.input, { backgroundColor: completed ? 'transparent' : c.surfaceElevated, color: c.text }]}
             value={weight}
             onChangeText={handleWeight}
             placeholder={unit.toUpperCase()}
@@ -125,7 +134,7 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
 
         <View style={styles.inputWrap}>
           <TextInput
-            style={[styles.input, { backgroundColor: set.isCompleted ? 'transparent' : c.surfaceElevated, color: c.text }]}
+            style={[styles.input, { backgroundColor: completed ? 'transparent' : c.surfaceElevated, color: c.text }]}
             value={reps}
             onChangeText={handleReps}
             placeholder="Reps"
@@ -137,12 +146,18 @@ export function SetRow({ set, setNumber, previousSet, onUpdate, onDelete, isDark
 
         {/* Checkmark Complete */}
         <TouchableOpacity
-          style={[styles.checkBtn, { backgroundColor: set.isCompleted ? c.success : c.surfaceElevated }]}
+          style={[
+            styles.checkBtn,
+            {
+                backgroundColor: completed ? c.success : c.surface,
+                borderColor: completed ? c.success : c.border,
+            },
+          ]}
           onPress={toggleComplete}
           activeOpacity={0.7}
         >
           <Animated.View style={{ transform: [{ scale: checkScale }], opacity: checkOpacity }}>
-            <FontAwesome name="check" size={12} color={set.isCompleted ? '#fff' : c.textTertiary} />
+            <FontAwesome name="check" size={11} color={completed ? '#fff' : c.textSecondary} />
           </Animated.View>
         </TouchableOpacity>
       </View>
@@ -214,6 +229,7 @@ const styles = StyleSheet.create({
   prevText: {
     fontSize: 14,
     fontWeight: '500',
+    opacity: 0.72,
   },
   inputWrap: {
     flex: 1,
@@ -221,21 +237,33 @@ const styles = StyleSheet.create({
   input: {
     height: 40,
     borderRadius: 12,
-    textAlign: 'center',
+    textAlign: 'left',
+    writingDirection: 'ltr',
+    paddingHorizontal: 12,
     fontSize: 16,
     fontWeight: '700',
   },
   checkBtn: {
-    width: 34,
+    width: 38,
     height: 34,
-    borderRadius: 17,
+    borderRadius: 9,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   deleteWrap: {
-    width: 75,
+    width: 88,
+    marginVertical: 6,
+    marginRight: 10,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 4,
+  },
+  deleteText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   modalOverlay: {
     flex: 1,
