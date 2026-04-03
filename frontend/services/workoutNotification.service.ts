@@ -15,6 +15,7 @@ function getNotificationsModule(): NotificationsModule | null {
     notificationsModule = require('expo-notifications') as NotificationsModule;
     notificationsModule.setNotificationHandler({
       handleNotification: async () => ({
+        shouldShowAlert: true,
         shouldShowBanner: true,
         shouldShowList: true,
         shouldPlaySound: false,
