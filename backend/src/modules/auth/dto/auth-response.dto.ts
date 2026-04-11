@@ -10,6 +10,9 @@ export class UserResponseDto {
   @ApiPropertyOptional()
   name?: string;
 
+  @ApiPropertyOptional()
+  photoUrl?: string;
+
   @ApiProperty()
   createdAt: string;
 }

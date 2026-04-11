@@ -1,4 +1,4 @@
-export interface User { id: string; email: string; createdAt: string; }
+export interface User { id: string; email: string; name?: string; photoUrl?: string; createdAt: string; }
 export interface AuthState { token: string | null; user: User | null; isAuthenticated: boolean; isLoading: boolean; }
 export interface SetData { id: string; exerciseId: string; weight: number | null; reps: number | null; isWarmup: boolean; isDropset: boolean; isFailure: boolean; isCompleted?: boolean; }
 export interface Exercise { id: string; workoutId: string; name: string; orderIndex: number; notes?: string | null; sets: SetData[]; }

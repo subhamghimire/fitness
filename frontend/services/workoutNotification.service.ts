@@ -26,8 +26,8 @@ function getNotificationsModule(): NotificationsModule | null {
     try {
       notificationsModule.setNotificationHandler({
         handleNotification: async () => ({
-          shouldShowAlert: false,
-          shouldShowBanner: false,
+          shouldShowAlert: true,
+          shouldShowBanner: true,
           shouldShowList: true,
           shouldPlaySound: false,
           shouldSetBadge: false,
@@ -74,7 +74,7 @@ class WorkoutNotificationService {
     if (Platform.OS === 'android' && this.permissionGranted) {
       await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
         name: 'Active Workout',
-        importance: Notifications.AndroidImportance.LOW,
+        importance: Notifications.AndroidImportance.DEFAULT,
         vibrationPattern: [0],
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       });

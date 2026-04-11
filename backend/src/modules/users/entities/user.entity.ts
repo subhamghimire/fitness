@@ -29,6 +29,9 @@ export class User extends AbstractEntity {
   @JoinColumn({ name: "avatar_id" })
   avatar: FileEntity;
 
+  @Column({ name: "google_photo_url", type: "varchar", length: 500, nullable: true })
+  googlePhotoUrl: string | null;
+
   @OneToMany(() => Workout, (w) => w.user)
   workouts: Workout[];
 

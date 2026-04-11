@@ -16,6 +16,7 @@ api.interceptors.response.use(r => r, async (error) => {
 export const authApi = {
   login: (email: string, password: string) => api.post<AuthResponse>('/auth/login', { email, password }),
   register: (email: string, password: string) => api.post<AuthResponse>('/auth/register', { email, password }),
+  googleLogin: (idToken: string) => api.post<AuthResponse>('/auth/google-login', { idToken }),
 };
 export const syncApi = {
   syncWorkouts: (payload: SyncPayload) => api.post<{ success: boolean; workoutId: string }>('/sync/workouts', payload),

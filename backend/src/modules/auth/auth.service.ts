@@ -21,6 +21,14 @@ import {
 import { ForgotPasswordDto, ResetPasswordDto, ChangePasswordDto } from './dto/password.dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 
+interface GoogleTokenInfo {
+  aud: string;
+  email: string;
+  email_verified: string;
+  name?: string;
+  picture?: string;
+}
+
 @Injectable()
 export class AuthService {
   private readonly accessTokenExpiry: number;
@@ -56,12 +64,40 @@ export class AuthService {
   async login(dto: LoginDto, userAgent?: string, ipAddress?: string): Promise<AuthResponseDto> {
     const user = await this.usersRepository.findOne({
       where: { email: dto.email.toLowerCase() },
-      select: ['id', 'email', 'name', 'password', 'createdAt']
+      select: ['id', 'email', 'name', 'password', 'createdAt', 'googlePhotoUrl']
     });
     if (!user || !(await bcrypt.compare(dto.password, user.password))) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    const tokens = await this.generateTokens(user, userAgent, ipAddress);
+    return { tokens, user: this.toUserResponse(user) };
+  }
+
+  async loginWithGoogle(idToken: string, userAgent?: string, ipAddress?: string): Promise<AuthResponseDto> {
+    const googleProfile = await this.verifyGoogleIdToken(idToken);
+    const email = googleProfile.email.toLowerCase();
+
+    let user = await this.usersRepository.findOne({
+      where: { email },
+      select: ['id', 'email', 'name', 'password', 'createdAt', 'googlePhotoUrl']
+    });
+
+    if (!user) {
+      user = this.usersRepository.create({
+        id: uuidv4(),
+        name: (googleProfile.name || email.split('@')[0]).trim(),
+        email,
+        googlePhotoUrl: googleProfile.picture || null,
+        // Keep password field populated for schema compatibility.
+        password: await bcrypt.hash(randomBytes(32).toString('hex'), 10),
+      });
+    } else {
+      user.name = (googleProfile.name || user.name || email.split('@')[0]).trim();
+      user.googlePhotoUrl = googleProfile.picture || user.googlePhotoUrl || null;
+    }
+
+    await this.usersRepository.save(user);
     const tokens = await this.generateTokens(user, userAgent, ipAddress);
     return { tokens, user: this.toUserResponse(user) };
   }
@@ -194,11 +230,43 @@ export class AuthService {
     return createHash('sha256').update(token).digest('hex');
   }
 
+  private async verifyGoogleIdToken(idToken: string): Promise<GoogleTokenInfo> {
+    const response = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
+    );
+    if (!response.ok) {
+      throw new UnauthorizedException('Invalid Google token');
+    }
+
+    const tokenInfo = (await response.json()) as Partial<GoogleTokenInfo>;
+    if (!tokenInfo.email || !tokenInfo.aud || tokenInfo.email_verified !== 'true') {
+      throw new UnauthorizedException('Google token missing required claims');
+    }
+
+    const allowedAudienceEnv =
+      this.configService.get<string>('GOOGLE_CLIENT_IDS') ||
+      this.configService.get<string>('GOOGLE_CLIENT_ID') ||
+      '';
+    const allowedAudiences = allowedAudienceEnv
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+
+    if (allowedAudiences.length > 0 && !allowedAudiences.includes(tokenInfo.aud)) {
+      throw new UnauthorizedException('Google token audience mismatch');
+    }
+
+    return tokenInfo as GoogleTokenInfo;
+  }
+
   private toUserResponse(user: User): UserResponseDto {
+    const appUrl = this.configService.get<string>('APP_URL') || '';
+    const avatarFromFile = user.avatar?.path ? `${appUrl}/${user.avatar.path}` : null;
     return {
       id: user.id,
       email: user.email,
       name: user.name,
+      photoUrl: user.googlePhotoUrl || avatarFromFile || undefined,
       createdAt: user.createdAt.toISOString()
     };
   }

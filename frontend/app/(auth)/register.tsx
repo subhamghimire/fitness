@@ -1,21 +1,31 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import { FontAwesome } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth.store';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const { register, isLoading } = useAuthStore();
+  const { register, loginWithGoogle, isLoading } = useAuthStore();
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  });
 
   const handleRegister = async () => {
     if (!email.trim() || !password.trim() || !confirm.trim()) { Alert.alert('Error', 'Fill in all fields'); return; }
@@ -25,6 +35,24 @@ export default function RegisterScreen() {
     try { await register(email.trim(), password); router.replace('/(tabs)'); }
     catch (err: any) { Alert.alert('Registration Failed', err.message || 'Please try again'); }
   };
+
+  useEffect(() => {
+    if (response?.type !== 'success') return;
+    const idToken = response.params?.id_token;
+    if (!idToken) {
+      Alert.alert('Google Sign-Up Failed', 'Could not get Google ID token.');
+      return;
+    }
+
+    (async () => {
+      try {
+        await loginWithGoogle(idToken);
+        router.replace('/(tabs)');
+      } catch (err: any) {
+        Alert.alert('Google Sign-Up Failed', err.message || 'Please try again.');
+      }
+    })();
+  }, [response]);
 
   return (
     <KeyboardAvoidingView
@@ -80,6 +108,16 @@ export default function RegisterScreen() {
             >
               {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>Create Account</Text>}
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.googleBtn, { backgroundColor: c.surfaceElevated, borderColor: c.border, opacity: isLoading ? 0.65 : 1 }]}
+              onPress={() => promptAsync()}
+              disabled={isLoading || !request}
+              activeOpacity={0.85}
+            >
+              <FontAwesome name="google" size={16} color={c.text} />
+              <Text style={[styles.googleBtnText, { color: c.text }]}>Continue With Google</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Footer */}
@@ -121,6 +159,16 @@ const styles = StyleSheet.create({
     shadowColor: '#6C63FF', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 5,
   },
   ctaText: { color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
+  googleBtn: {
+    height: 50,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  googleBtnText: { fontSize: 15, fontWeight: '700' },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   footerText: { fontSize: 14, fontWeight: '500' },
   footerLink: { fontSize: 14, fontWeight: '700' },

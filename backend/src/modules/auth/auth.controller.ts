@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ForgotPasswordDto, ResetPasswordDto, ChangePasswordDto } from './dto/password.dto';
 import { AuthResponseDto, RefreshTokenResponseDto, MessageResponseDto } from './dto/auth-response.dto';
@@ -39,6 +40,19 @@ export class AuthController {
     @Ip() ip: string
   ): Promise<AuthResponseDto> {
     return this.authService.login(dto, userAgent, ip);
+  }
+
+  @Post('google-login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login/Register with Google ID token' })
+  @ApiResponse({ status: 200, type: AuthResponseDto })
+  @ApiResponse({ status: 401, description: 'Invalid Google token' })
+  googleLogin(
+    @Body() dto: GoogleLoginDto,
+    @UserAgent() userAgent: string,
+    @Ip() ip: string
+  ): Promise<AuthResponseDto> {
+    return this.authService.loginWithGoogle(dto.idToken, userAgent, ip);
   }
 
   @Post('refresh')
