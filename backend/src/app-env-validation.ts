@@ -1,5 +1,5 @@
 import { plainToInstance, Type } from "class-transformer";
-import { IsEnum, IsInt, IsNotEmpty, IsNumberString, IsString, IsUrl, validateSync } from "class-validator";
+import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, validateSync } from "class-validator";
 
 enum Environment {
   DEVELOPMENT = "development",
@@ -44,6 +44,10 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   POSTGRES_PASSWORD: string;
+
+  @IsOptional()
+  @IsString()
+  GOOGLE_CLIENT_IDS?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

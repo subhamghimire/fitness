@@ -20,6 +20,11 @@ export default function LoginScreen() {
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
+  const isGoogleConfigured = Boolean(
+    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID &&
+    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID &&
+    process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
+  );
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
@@ -117,8 +122,14 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={[styles.googleBtn, { backgroundColor: c.surfaceElevated, borderColor: c.border, opacity: isLoading ? 0.65 : 1 }]}
-            onPress={() => promptAsync()}
-            disabled={isLoading || !request}
+            onPress={() => {
+              if (!isGoogleConfigured) {
+                Alert.alert('Google Sign-In Not Configured', 'Please set Google client IDs in frontend .env first.');
+                return;
+              }
+              promptAsync();
+            }}
+            disabled={isLoading || !request || !isGoogleConfigured}
             activeOpacity={0.85}
           >
             <FontAwesome name="google" size={16} color={c.text} />
