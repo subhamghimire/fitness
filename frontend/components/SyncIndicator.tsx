@@ -6,12 +6,12 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
 
 const LABELS: Record<string, string> = {
-  idle: 'Synced',
-  syncing: 'Syncing…',
+  idle: '',
+  syncing: 'Syncing',
   pending: 'Pending',
   offline: 'Offline',
-  failed: 'Sync failed',
-  conflict: 'Conflict resolved',
+  failed: 'Retry',
+  conflict: 'Synced',
 };
 
 export function SyncIndicator() {
@@ -20,27 +20,30 @@ export function SyncIndicator() {
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
 
-  if (status === 'idle' && pendingCount === 0) return null;
+  if ((status === 'idle' || status === 'conflict') && pendingCount === 0) return null;
 
   const color =
     status === 'failed'
       ? c.danger
       : status === 'offline' || status === 'pending'
-        ? c.textSecondary
+        ? c.textTertiary
         : status === 'syncing'
           ? c.accent
-          : c.success;
+          : c.textSecondary;
 
   const label =
     status === 'pending' && pendingCount > 0
-      ? `${pendingCount} pending`
-      : LABELS[status] || status;
+      ? `${pendingCount}`
+      : LABELS[status] || '';
+
+  if (!label) return null;
 
   return (
     <TouchableOpacity
-      style={[styles.wrap, { backgroundColor: c.surfaceElevated, borderColor: c.border }]}
+      style={styles.wrap}
       onPress={() => syncService.triggerSync()}
-      activeOpacity={0.75}
+      activeOpacity={0.7}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       accessibilityLabel={`Sync status: ${label}`}
     >
       <View style={[styles.dot, { backgroundColor: color }]} />
@@ -53,12 +56,10 @@ const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
+    gap: 5,
+    paddingHorizontal: 4,
     paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
   },
-  dot: { width: 7, height: 7, borderRadius: 4 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
   text: { fontSize: 12, fontWeight: '600' },
 });

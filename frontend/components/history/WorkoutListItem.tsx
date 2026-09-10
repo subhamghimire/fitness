@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -13,7 +13,7 @@ interface Props {
   onPress: () => void;
 }
 
-export function WorkoutListItem({ workout, onPress }: Props) {
+function WorkoutListItemComponent({ workout, onPress }: Props) {
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
   const unit = useUnitStore((state) => state.unit);
@@ -25,105 +25,65 @@ export function WorkoutListItem({ workout, onPress }: Props) {
   );
 
   return (
-    <TouchableOpacity 
-      style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]} 
+    <TouchableOpacity
+      style={[styles.row, { borderBottomColor: c.border }]}
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        void Haptics.selectionAsync();
         onPress();
       }}
-      activeOpacity={0.7}
+      activeOpacity={0.65}
     >
       <View style={styles.header}>
         <View style={styles.titleGroup}>
           <Text style={[styles.date, { color: c.text }]}>{formatDate(workout.startedAt)}</Text>
-          <Text style={[styles.duration, { color: c.textSecondary }]}>
-            {formatDuration(workout.startedAt, workout.endedAt)}
+          <Text style={[styles.meta, { color: c.textSecondary }]}>
+            {formatDuration(workout.startedAt, workout.endedAt)} · {workout.exercises.length} exercises ·{' '}
+            {totalSets} sets · {(totalVolume / 1000).toFixed(1)}k {unit}
           </Text>
         </View>
-        <FontAwesome name="chevron-right" size={12} color={c.textTertiary} />
-      </View>
-
-      <View style={styles.statsRow}>
-        <View style={[styles.pill, { backgroundColor: c.surfaceElevated }]}>
-          <FontAwesome name="list-ul" size={10} color={c.accent} />
-          <Text style={[styles.pillText, { color: c.textSecondary }]}>{workout.exercises.length} Exercises</Text>
-        </View>
-        <View style={[styles.pill, { backgroundColor: c.surfaceElevated }]}>
-          <FontAwesome name="repeat" size={10} color={c.success} />
-          <Text style={[styles.pillText, { color: c.textSecondary }]}>{totalSets} Sets</Text>
-        </View>
-        <View style={[styles.pill, { backgroundColor: c.surfaceElevated }]}>
-          <FontAwesome name="bolt" size={10} color={c.warning || '#FF9F0A'} />
-          <Text style={[styles.pillText, { color: c.textSecondary }]}>{(totalVolume / 1000).toFixed(1)}k {unit}</Text>
-        </View>
+        <FontAwesome name="chevron-right" size={11} color={c.textTertiary} />
       </View>
 
       {workout.exercises.length > 0 && (
-        <View style={[styles.exercisesRow, { borderTopColor: c.border }]}>
-          {workout.exercises.slice(0, 3).map((ex) => (
-            <Text key={ex.id} style={[styles.exerciseText, { color: c.text }]} numberOfLines={1}>
-              • {ex.name}
-            </Text>
-          ))}
-          {workout.exercises.length > 3 && (
-            <Text style={[styles.exerciseText, { color: c.textTertiary }]}>
-              + {workout.exercises.length - 3} more...
-            </Text>
-          )}
-        </View>
+        <Text style={[styles.exerciseText, { color: c.textTertiary }]} numberOfLines={1}>
+          {workout.exercises
+            .slice(0, 4)
+            .map((ex) => ex.name)
+            .join(' · ')}
+          {workout.exercises.length > 4 ? ` +${workout.exercises.length - 4}` : ''}
+        </Text>
       )}
     </TouchableOpacity>
   );
 }
 
+export const WorkoutListItem = memo(WorkoutListItemComponent);
+
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 12,
+  row: {
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 4,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
   },
-  titleGroup: {},
+  titleGroup: { flex: 1, paddingRight: 8 },
   date: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.3,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
-  duration: {
+  meta: {
     fontSize: 13,
     fontWeight: '500',
-    marginTop: 2,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    gap: 6,
-  },
-  pillText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  exercisesRow: {
-    borderTopWidth: 1,
-    paddingTop: 12,
-    gap: 4,
+    marginTop: 3,
   },
   exerciseText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '400',
   },
 });

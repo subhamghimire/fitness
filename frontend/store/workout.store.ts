@@ -213,20 +213,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     if (!ex) throw new Error('Exercise not found');
     const id = generateId();
     const last = ex.sets[ex.sets.length - 1];
-    const orderIndex = await WorkoutRepository.nextSetOrder(exerciseId);
-    const sync = newSyncDefaults();
-    await WorkoutRepository.insertSet({
-      id,
-      exercise_id: exerciseId,
-      order_index: orderIndex,
-      weight: last?.weight ?? null,
-      reps: last?.reps ?? null,
-      is_warmup: 0,
-      is_dropset: 0,
-      is_failure: 0,
-      is_completed: 0,
-      ...sync,
-    });
+    const orderIndex = last ? (last.orderIndex ?? ex.sets.length - 1) + 1 : 0;
     const newSet: SetData = {
       id,
       exerciseId,
@@ -244,21 +231,30 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         exercises: w.exercises.map((e) => (e.id === exerciseId ? { ...e, sets: [...e.sets, newSet] } : e)),
       },
     });
+    const sync = newSyncDefaults();
+    try {
+      await WorkoutRepository.insertSet({
+        id,
+        exercise_id: exerciseId,
+        order_index: orderIndex,
+        weight: last?.weight ?? null,
+        reps: last?.reps ?? null,
+        is_warmup: 0,
+        is_dropset: 0,
+        is_failure: 0,
+        is_completed: 0,
+        ...sync,
+      });
+    } catch {
+      // Optimistic set remains in UI
+    }
     return id;
   },
 
   updateSet: async (setId, data) => {
     const { activeWorkout: w } = get();
     if (!w) return;
-    const localData: Partial<SetLocal> = {};
-    if (data.weight !== undefined) localData.weight = data.weight;
-    if (data.reps !== undefined) localData.reps = data.reps;
-    if (data.orderIndex !== undefined) localData.order_index = data.orderIndex;
-    if (data.isWarmup !== undefined) localData.is_warmup = data.isWarmup ? 1 : 0;
-    if (data.isDropset !== undefined) localData.is_dropset = data.isDropset ? 1 : 0;
-    if (data.isFailure !== undefined) localData.is_failure = data.isFailure ? 1 : 0;
-    if (data.isCompleted !== undefined) localData.is_completed = data.isCompleted ? 1 : 0;
-    await WorkoutRepository.updateSet(setId, localData);
+    // Optimistic UI first — never wait on SQLite for set logging feel.
     set({
       activeWorkout: {
         ...w,
@@ -268,12 +264,24 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         })),
       },
     });
+    const localData: Partial<SetLocal> = {};
+    if (data.weight !== undefined) localData.weight = data.weight;
+    if (data.reps !== undefined) localData.reps = data.reps;
+    if (data.orderIndex !== undefined) localData.order_index = data.orderIndex;
+    if (data.isWarmup !== undefined) localData.is_warmup = data.isWarmup ? 1 : 0;
+    if (data.isDropset !== undefined) localData.is_dropset = data.isDropset ? 1 : 0;
+    if (data.isFailure !== undefined) localData.is_failure = data.isFailure ? 1 : 0;
+    if (data.isCompleted !== undefined) localData.is_completed = data.isCompleted ? 1 : 0;
+    try {
+      await WorkoutRepository.updateSet(setId, localData);
+    } catch {
+      // Keep optimistic state; next write/sync will reconcile.
+    }
   },
 
   removeSet: async (setId) => {
     const { activeWorkout: w } = get();
     if (!w) return;
-    await WorkoutRepository.deleteSet(setId);
     set({
       activeWorkout: {
         ...w,
@@ -283,6 +291,11 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         })),
       },
     });
+    try {
+      await WorkoutRepository.deleteSet(setId);
+    } catch {
+      // Keep optimistic removal
+    }
   },
 
   cycleSetType: async (setId) => {

@@ -40,9 +40,9 @@ export function SummaryCard({ title, value, subValue, icon, colorHex, style }: P
 
 const styles = StyleSheet.create({
   card: {
-    minHeight: 100,
-    borderRadius: 20,
-    padding: 16,
+    minHeight: 88,
+    borderRadius: 12,
+    padding: 14,
     justifyContent: 'space-between',
   },
   headerRow: {
@@ -51,28 +51,28 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   iconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },
   title: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '500',
     flex: 1,
   },
   valueRow: {
     alignItems: 'flex-start',
   },
   value: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
   subValue: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 2,
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 1,
   },
 });

@@ -3,7 +3,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
-import { Platform, View } from 'react-native';
+import { Platform, View, StyleSheet } from 'react-native';
 import { SyncIndicator } from '@/components/SyncIndicator';
 
 function TabIcon(props: { name: React.ComponentProps<typeof FontAwesome>['name']; color: string }) {
@@ -24,27 +24,22 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: c.surface,
           borderTopColor: c.border,
-          borderTopWidth: 1,
+          borderTopWidth: StyleSheet.hairlineWidth,
           paddingBottom: Platform.OS === 'ios' ? 24 : 8,
-          paddingTop: 10,
-          height: Platform.OS === 'ios' ? 84 : 64,
-          shadowColor: '#000',
-          shadowOpacity: 0.12,
-          shadowRadius: 12,
-          elevation: 10,
+          paddingTop: 8,
+          height: Platform.OS === 'ios' ? 82 : 60,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: '600',
-          marginTop: 2,
-          letterSpacing: 0.2,
+          marginTop: 1,
         },
         headerStyle: {
           backgroundColor: c.surface,
           shadowColor: 'transparent',
           elevation: 0,
           borderBottomColor: c.border,
-          borderBottomWidth: 1,
+          borderBottomWidth: StyleSheet.hairlineWidth,
         },
         headerTitleStyle: {
           color: c.text,

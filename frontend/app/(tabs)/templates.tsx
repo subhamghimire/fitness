@@ -85,7 +85,7 @@ export default function TemplatesScreen() {
     const exNames = item.exercises.slice(0, 3).map(e => e.name).join(', ') + (exCount > 3 ? '...' : '');
 
     return (
-      <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+      <View style={[styles.card, { backgroundColor: c.surface }]}>
         <View style={styles.cardHeader}>
           <Text style={[styles.cardTitle, { color: c.text }]}>{item.name}</Text>
           <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => handleTemplateOptions(item)}>
@@ -143,30 +143,29 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   listContent: { padding: 16, paddingBottom: 100 },
   card: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.3,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
     flex: 1,
   },
   cardDesc: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 16,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
   },
   startBtn: {
-    height: 44,
+    height: 40,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',

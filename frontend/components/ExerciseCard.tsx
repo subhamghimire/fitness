@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { SetRow } from './SetRow';
@@ -19,8 +19,17 @@ interface Props {
   isDark?: boolean;
 }
 
-export function ExerciseCard({
-  exercise, previousSets, onAddSet, onUpdateSet, onDeleteSet, onCycleSetType, onOpenExerciseMenu, onPressExerciseTitle, onUpdateNotes, isDark = false,
+function ExerciseCardComponent({
+  exercise,
+  previousSets,
+  onAddSet,
+  onUpdateSet,
+  onDeleteSet,
+  onCycleSetType,
+  onOpenExerciseMenu,
+  onPressExerciseTitle,
+  onUpdateNotes,
+  isDark = false,
 }: Props) {
   const c = isDark ? C.dark : C.light;
   const unit = useUnitStore((state) => state.unit);
@@ -29,9 +38,14 @@ export function ExerciseCard({
   const [isNotesExpanded, setIsNotesExpanded] = React.useState(!!exercise.notes);
   const [notesText, setNotesText] = React.useState(exercise.notes ?? '');
 
+  React.useEffect(() => {
+    setNotesText(exercise.notes ?? '');
+  }, [exercise.notes]);
+
+  const toggleNotes = useCallback(() => setIsNotesExpanded((v) => !v), []);
+
   return (
-    <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-      {/* Header */}
+    <View style={[styles.card, { backgroundColor: c.surface }]}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity activeOpacity={0.7} onPress={onPressExerciseTitle}>
@@ -41,21 +55,32 @@ export function ExerciseCard({
           </TouchableOpacity>
         </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => setIsNotesExpanded(!isNotesExpanded)} style={[styles.iconBtn, isNotesExpanded ? { backgroundColor: c.accentSoft } : null]} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="document-text-outline" size={20} color={isNotesExpanded ? c.accent : c.textSecondary} />
+          <TouchableOpacity
+            onPress={toggleNotes}
+            style={styles.iconBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name="document-text-outline"
+              size={18}
+              color={isNotesExpanded ? c.accent : c.textSecondary}
+            />
           </TouchableOpacity>
-          <TouchableOpacity onPress={onOpenExerciseMenu} style={styles.iconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="ellipsis-horizontal" size={20} color={c.textSecondary} />
+          <TouchableOpacity
+            onPress={onOpenExerciseMenu}
+            style={styles.iconBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="ellipsis-horizontal" size={18} color={c.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Notes Section */}
       {isNotesExpanded && (
         <View style={[styles.notesWrap, { backgroundColor: c.background }]}>
           <TextInput
             style={[styles.notesInput, { color: c.text }]}
-            placeholder="Add exercise notes..."
+            placeholder="Notes…"
             placeholderTextColor={c.textTertiary}
             multiline
             value={notesText}
@@ -65,16 +90,14 @@ export function ExerciseCard({
         </View>
       )}
 
-      {/* Column Headers */}
       <View style={styles.colHeaders}>
         <Text style={[styles.colLabel, styles.colSet, { color: c.textTertiary }]}>SET</Text>
-        <Text style={[styles.colLabel, styles.colPrev, { color: c.textTertiary }]}>PREVIOUS</Text>
+        <Text style={[styles.colLabel, styles.colPrev, { color: c.textTertiary }]}>PREV</Text>
         <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>{unit.toUpperCase()}</Text>
         <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>REPS</Text>
         <Text style={[styles.colLabel, styles.colActLabel, { color: c.textTertiary }]}>✓</Text>
       </View>
 
-      {/* Sets */}
       <View style={styles.sets}>
         {exercise.sets.map((s, index) => {
           const isWorking = !s.isWarmup && !s.isDropset && !s.isFailure;
@@ -95,102 +118,91 @@ export function ExerciseCard({
         })}
       </View>
 
-      {/* Add Set */}
-      <TouchableOpacity
-        style={styles.addSetBtn}
-        onPress={onAddSet}
-        activeOpacity={0.6}
-      >
-        <View style={[styles.addSetContent, { backgroundColor: c.accentSoft }]}>
-          <FontAwesome name="plus" size={13} color={c.accent} />
-          <Text style={[styles.addSetText, { color: c.accent }]}>Add Set</Text>
-        </View>
+      <TouchableOpacity style={styles.addSetBtn} onPress={onAddSet} activeOpacity={0.65}>
+        <Text style={[styles.addSetText, { color: c.accent }]}>+ Add Set</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
+export const ExerciseCard = memo(ExerciseCardComponent);
+
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 20,
-    borderWidth: 1,
-    marginBottom: 20,
+    borderRadius: 14,
+    marginBottom: 14,
     overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 14,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
   headerLeft: {
     flex: 1,
-    paddingRight: 10,
+    paddingRight: 8,
   },
   exerciseName: {
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: -0.3,
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 2,
   },
   iconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
   notesWrap: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 12,
-    padding: 12,
+    marginHorizontal: 14,
+    marginBottom: 8,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   notesInput: {
     fontSize: 14,
     fontWeight: '500',
-    minHeight: 40,
+    minHeight: 36,
   },
   colHeaders: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 4,
-    marginBottom: 4,
+    marginBottom: 2,
+    alignItems: 'center',
   },
   colLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.4,
     textAlign: 'center',
   },
-  colSet: { width: 32 },
-  colPrev: { width: 60, marginLeft: 12 },
-  colVal: { flex: 1, marginLeft: 12 },
-  colAct: { width: 38, marginLeft: 12 }, // matches check button width
-  colActLabel: { width: 38, marginLeft: 12, textAlign: 'center' },
+  colSet: { width: 30 },
+  colPrev: { width: 64, marginLeft: 10 },
+  colVal: { flex: 1, marginLeft: 10 },
+  colActLabel: { width: 34, marginLeft: 10, textAlign: 'center' },
   sets: {
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
   addSetBtn: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  addSetContent: {
-    flexDirection: 'row',
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    paddingTop: 4,
     alignItems: 'center',
-    justifyContent: 'center',
-    height: 44,
-    borderRadius: 12,
-    gap: 8,
   },
   addSetText: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
+    paddingVertical: 8,
   },
 });

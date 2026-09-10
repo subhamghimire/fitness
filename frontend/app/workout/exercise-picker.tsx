@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
-  View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, Alert,
+  View,
+  Text,
+  TextInput,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
 } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useWorkoutStore } from '@/store/workout.store';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
@@ -17,48 +24,60 @@ const CATEGORIES: { label: string; icon: string; exercises: string[] }[] = [
   { label: 'Core', icon: 'bullseye', exercises: ['Plank', 'Crunch', 'Leg Raise', 'Ab Wheel Rollout', 'Cable Crunch', 'Russian Twist'] },
 ];
 
-const ALL_EXERCISES = CATEGORIES.flatMap(c => c.exercises);
+const ALL_EXERCISES = CATEGORIES.flatMap((c) => c.exercises);
 
 export default function ExercisePickerScreen() {
-  const { replaceExerciseId, currentName } = useLocalSearchParams<{ replaceExerciseId?: string; currentName?: string }>();
+  const { replaceExerciseId, currentName } = useLocalSearchParams<{
+    replaceExerciseId?: string;
+    currentName?: string;
+  }>();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [custom, setCustom] = useState('');
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
-  const { addExercise, addSet, updateExercise, loadPreviousSets } = useWorkoutStore();
+  const addExercise = useWorkoutStore((s) => s.addExercise);
+  const addSet = useWorkoutStore((s) => s.addSet);
+  const updateExercise = useWorkoutStore((s) => s.updateExercise);
+  const loadPreviousSets = useWorkoutStore((s) => s.loadPreviousSets);
   const isReplaceMode = !!replaceExerciseId;
 
-  const handleSelect = async (name: string) => {
-    try {
-      if (replaceExerciseId) {
-        await updateExercise(replaceExerciseId, { name });
-        await loadPreviousSets(replaceExerciseId, name);
-      } else {
-        const id = await addExercise(name);
-        await addSet(id);
-      }
+  const handleSelect = useCallback(
+    async (name: string) => {
+      void Haptics.selectionAsync();
       router.back();
-    }
-    catch { Alert.alert('Error', 'Failed to add exercise'); }
-  };
+      try {
+        if (replaceExerciseId) {
+          await updateExercise(replaceExerciseId, { name });
+          await loadPreviousSets(replaceExerciseId, name);
+        } else {
+          const id = await addExercise(name);
+          await addSet(id);
+        }
+      } catch {
+        Alert.alert('Could not add exercise', 'Please try again.');
+      }
+    },
+    [addExercise, addSet, loadPreviousSets, replaceExerciseId, router, updateExercise]
+  );
 
   const handleCustomAdd = async () => {
     const name = custom.trim();
-    if (!name) { Alert.alert('Error', 'Enter an exercise name'); return; }
+    if (!name) return;
     await handleSelect(name);
   };
 
-  // Filter logic
-  let exercises: string[] = [];
-  if (search.length > 0) {
-    exercises = ALL_EXERCISES.filter(e => e.toLowerCase().includes(search.toLowerCase()));
-  } else if (activeCategory) {
-    exercises = CATEGORIES.find(c => c.label === activeCategory)?.exercises ?? [];
-  } else {
-    exercises = ALL_EXERCISES;
-  }
+  const exercises = useMemo(() => {
+    if (search.length > 0) {
+      const q = search.toLowerCase();
+      return ALL_EXERCISES.filter((e) => e.toLowerCase().includes(q));
+    }
+    if (activeCategory) {
+      return CATEGORIES.find((cat) => cat.label === activeCategory)?.exercises ?? [];
+    }
+    return ALL_EXERCISES;
+  }, [search, activeCategory]);
 
   return (
     <>
@@ -74,53 +93,50 @@ export default function ExercisePickerScreen() {
               <Text style={{ color: c.danger, fontSize: 16, fontWeight: '600' }}>Cancel</Text>
             </TouchableOpacity>
           ),
-          headerRight: () => (isReplaceMode
-            ? <Text style={{ color: c.textSecondary, fontSize: 13, fontWeight: '600' }}>Current: {currentName}</Text>
-            : <View style={{ width: 54 }} />),
+          headerRight: () =>
+            isReplaceMode ? (
+              <Text style={{ color: c.textSecondary, fontSize: 12, fontWeight: '500' }} numberOfLines={1}>
+                {currentName}
+              </Text>
+            ) : (
+              <View style={{ width: 54 }} />
+            ),
         }}
       />
 
       <View style={[styles.container, { backgroundColor: c.background }]}>
-        {/* Search */}
         <View style={styles.searchWrap}>
-          <View style={[styles.searchBar, { backgroundColor: c.surface, borderColor: c.border }]}>
-            <FontAwesome name="search" size={15} color={c.textSecondary} />
+          <View style={[styles.searchBar, { backgroundColor: c.surfaceElevated }]}>
+            <FontAwesome name="search" size={14} color={c.textSecondary} />
             <TextInput
               style={[styles.searchInput, { color: c.text }]}
-              placeholder="Search exercises…"
+              placeholder="Search…"
               placeholderTextColor={c.textTertiary}
               value={search}
               onChangeText={setSearch}
               autoCapitalize="none"
               autoCorrect={false}
+              clearButtonMode="while-editing"
             />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch('')}>
-                <FontAwesome name="times-circle" size={16} color={c.danger} />
-              </TouchableOpacity>
-            )}
           </View>
         </View>
 
-        {/* Category chips */}
         {search.length === 0 && (
           <FlatList
             data={[{ label: 'All', icon: 'th-large' }, ...CATEGORIES]}
-            keyExtractor={i => i.label}
+            keyExtractor={(i) => i.label}
             horizontal
             style={styles.chipScroller}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chipList}
+            keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => {
               const isActive = item.label === 'All' ? activeCategory === null : activeCategory === item.label;
               return (
                 <TouchableOpacity
-                  style={[styles.chip, { backgroundColor: isActive ? c.accent : c.surface, borderColor: isActive ? c.accent : c.border }]}
+                  style={[styles.chip, { backgroundColor: isActive ? c.accent : c.surface }]}
                   onPress={() => setActiveCategory(item.label === 'All' ? null : item.label)}
                 >
-                  {item.label === 'All' ? (
-                    <FontAwesome name={item.icon as any} size={12} color={isActive ? '#fff' : c.textSecondary} />
-                  ) : null}
                   <Text style={[styles.chipText, { color: isActive ? '#fff' : c.textSecondary }]}>{item.label}</Text>
                 </TouchableOpacity>
               );
@@ -128,56 +144,43 @@ export default function ExercisePickerScreen() {
           />
         )}
 
-        {/* Custom exercise */}
-        <View style={[styles.customCard, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <Text style={[styles.customLabel, { color: c.textSecondary }]}>Custom Exercise</Text>
-          <View style={styles.customRow}>
-            <TextInput
-              style={[styles.customInput, { color: c.text }]}
-              placeholder="Type exercise name"
-              placeholderTextColor={c.textTertiary}
-              value={custom}
-              onChangeText={setCustom}
-              autoCapitalize="words"
-              returnKeyType="done"
-              onSubmitEditing={handleCustomAdd}
-            />
-            <TouchableOpacity
-              style={[
-                styles.customAddBtn,
-                { backgroundColor: custom.trim() ? c.accent : c.surfaceElevated },
-              ]}
-              onPress={handleCustomAdd}
-              activeOpacity={0.85}
-            >
-              <FontAwesome name="plus" size={14} color={custom.trim() ? '#fff' : c.textSecondary} />
-            </TouchableOpacity>
-          </View>
+        <View style={styles.customRow}>
+          <TextInput
+            style={[styles.customInput, { color: c.text, backgroundColor: c.surface }]}
+            placeholder="Custom exercise name"
+            placeholderTextColor={c.textTertiary}
+            value={custom}
+            onChangeText={setCustom}
+            autoCapitalize="words"
+            returnKeyType="done"
+            onSubmitEditing={handleCustomAdd}
+          />
+          <TouchableOpacity
+            style={[styles.customAddBtn, { backgroundColor: custom.trim() ? c.accent : c.surfaceElevated }]}
+            onPress={handleCustomAdd}
+            activeOpacity={0.8}
+          >
+            <FontAwesome name="plus" size={14} color={custom.trim() ? '#fff' : c.textSecondary} />
+          </TouchableOpacity>
         </View>
 
-        {/* Exercise list */}
         <FlatList
           data={exercises}
           keyExtractor={(i) => i}
-          style={[styles.listWrap, { backgroundColor: c.surface, borderColor: c.border }]}
+          style={styles.listWrap}
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           ItemSeparatorComponent={() => <View style={[styles.sep, { backgroundColor: c.border }]} />}
           renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.exItem, { backgroundColor: c.surface }]}
-              onPress={() => handleSelect(item)}
-              activeOpacity={0.75}
-            >
+            <TouchableOpacity style={styles.exItem} onPress={() => handleSelect(item)} activeOpacity={0.55}>
               <Text style={[styles.exName, { color: c.text }]}>{item}</Text>
-              <View style={[styles.addPill, { backgroundColor: c.surfaceElevated }]}>
-                <FontAwesome name="plus" size={11} color={c.accent} />
-              </View>
+              <FontAwesome name="plus" size={12} color={c.accent} />
             </TouchableOpacity>
           )}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={[styles.emptyText, { color: c.textSecondary }]}>No exercises found</Text>
+              <Text style={[styles.emptyText, { color: c.textSecondary }]}>No matches — add it as custom above</Text>
             </View>
           }
         />
@@ -188,64 +191,52 @@ export default function ExercisePickerScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  searchWrap: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
+  searchWrap: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6 },
   searchBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    height: 44, borderRadius: 12, paddingHorizontal: 14, borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 40,
+    borderRadius: 10,
+    paddingHorizontal: 12,
   },
-  searchInput: { flex: 1, fontSize: 16, fontWeight: '400' },
-  chipList: { paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
-  chipScroller: { flexGrow: 0 },
+  searchInput: { flex: 1, fontSize: 16, fontWeight: '400', paddingVertical: 0 },
+  chipList: { paddingHorizontal: 16, paddingVertical: 6, gap: 8 },
+  chipScroller: { flexGrow: 0, maxHeight: 44 },
   chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    height: 34, paddingHorizontal: 12, borderRadius: 17, borderWidth: 1,
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
   },
-  chipText: { fontSize: 12, fontWeight: '700' },
-  customCard: {
-    marginHorizontal: 16,
-    marginTop: 4,
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  customLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.7,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
+  chipText: { fontSize: 13, fontWeight: '600' },
   customRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     alignItems: 'center',
-    borderRadius: 10,
-    padding: 8,
+    paddingHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 8,
   },
   customInput: {
     flex: 1,
     height: 40,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
     fontSize: 15,
+    borderRadius: 10,
   },
-  customAddBtn: { width: 42, height: 42, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  listWrap: {
-    flex: 1,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  list: { paddingVertical: 2 },
+  customAddBtn: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  listWrap: { flex: 1 },
+  list: { paddingHorizontal: 8, paddingBottom: 24 },
   exItem: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    minHeight: 56, paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 48,
+    paddingHorizontal: 12,
   },
   exName: { fontSize: 16, fontWeight: '500', flex: 1 },
-  addPill: { width: 30, height: 30, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  sep: { height: 1, marginLeft: 16, marginRight: 16 },
-  empty: { padding: 28, alignItems: 'center' },
-  emptyText: { fontSize: 15, fontWeight: '500' },
+  sep: { height: StyleSheet.hairlineWidth, marginLeft: 12 },
+  empty: { padding: 24, alignItems: 'center' },
+  emptyText: { fontSize: 14, fontWeight: '500', textAlign: 'center' },
 });

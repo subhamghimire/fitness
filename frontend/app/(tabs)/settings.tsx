@@ -76,10 +76,12 @@ export default function SettingsScreen() {
     try {
       const r = await syncService.syncNow('manual');
       Alert.alert(
-        r.success ? 'Sync Complete' : 'Sync Failed',
+        r.success ? 'Synced' : 'Couldn’t sync',
         r.success
-          ? `Synced ${r.syncedWorkoutIds.length} workout(s)`
-          : r.errors.join('\n') || 'Please try again'
+          ? r.syncedWorkoutIds.length
+            ? `Uploaded ${r.syncedWorkoutIds.length} workout(s). Your data is safe.`
+            : 'Everything is up to date.'
+          : 'Your workouts are saved on this device. We’ll try again later.'
       );
       await loadCount();
     } catch {

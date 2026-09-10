@@ -1,9 +1,10 @@
 import { create } from 'zustand';
+import * as Haptics from 'expo-haptics';
 
 interface TimerState {
   isActive: boolean;
   timeLeft: number;
-  duration: number; // default 60s
+  duration: number;
   startTimer: (durationSeconds?: number) => void;
   stopTimer: () => void;
   tick: () => void;
@@ -11,7 +12,7 @@ interface TimerState {
 }
 
 export const useTimerStore = create<TimerState>((set, get) => {
-  let interval: NodeJS.Timeout | null = null;
+  let interval: ReturnType<typeof setInterval> | null = null;
 
   const clearTimerInterval = () => {
     if (interval) {
@@ -28,7 +29,7 @@ export const useTimerStore = create<TimerState>((set, get) => {
     startTimer: (durationSeconds = 60) => {
       clearTimerInterval();
       set({ isActive: true, duration: durationSeconds, timeLeft: durationSeconds });
-      
+
       interval = setInterval(() => {
         get().tick();
       }, 1000);
@@ -42,11 +43,10 @@ export const useTimerStore = create<TimerState>((set, get) => {
     tick: () => {
       const { timeLeft, isActive } = get();
       if (!isActive) return;
-      
+
       if (timeLeft <= 1) {
-        // Timer finished
         get().stopTimer();
-        // Here you would trigger haptics
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         set({ timeLeft: timeLeft - 1 });
       }
@@ -58,9 +58,10 @@ export const useTimerStore = create<TimerState>((set, get) => {
       const newTime = Math.max(0, timeLeft + seconds);
       if (newTime === 0) {
         get().stopTimer();
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         set({ timeLeft: newTime });
       }
-    }
+    },
   };
 });

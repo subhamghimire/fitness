@@ -1,75 +1,89 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated } from 'react-native';
+import React, { useEffect, useRef, useState, memo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useTimerStore } from '@/store/timer.store';
 import { C } from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 
-const { width } = Dimensions.get('window');
-
-export function FloatingRestTimer() {
-  const { isActive, timeLeft, stopTimer, adjustTimer } = useTimerStore();
+function FloatingRestTimerComponent() {
+  const isActive = useTimerStore((s) => s.isActive);
+  const timeLeft = useTimerStore((s) => s.timeLeft);
+  const stopTimer = useTimerStore((s) => s.stopTimer);
+  const adjustTimer = useTimerStore((s) => s.adjustTimer);
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
 
-  // Slide-in animation
-  const [translateY] = useState(new Animated.Value(100));
+  const translateY = useRef(new Animated.Value(120)).current;
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     if (isActive) {
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        bounciness: 12,
-        speed: 14,
-      }).start();
-    } else {
+      setMounted(true);
       Animated.timing(translateY, {
-        toValue: 100,
-        duration: 300,
+        toValue: 0,
+        duration: 180,
         useNativeDriver: true,
       }).start();
+    } else if (mounted) {
+      Animated.timing(translateY, {
+        toValue: 120,
+        duration: 160,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setMounted(false);
+      });
     }
-  }, [isActive]);
+  }, [isActive, mounted, translateY]);
 
-  if (!isActive && translateY === new Animated.Value(100)) return null;
+  if (!mounted && !isActive) return null;
 
   const min = Math.floor(timeLeft / 60);
   const sec = timeLeft % 60;
   const timeString = `${min}:${sec < 10 ? '0' : ''}${sec}`;
 
   return (
-    <Animated.View style={[styles.container, { transform: [{ translateY }] }]}>
-      <View style={[styles.pill, { backgroundColor: c.surfaceElevated, borderColor: c.border }]}>
-        
-        <TouchableOpacity style={styles.actionBtn} onPress={() => adjustTimer(-15)}>
-          <Text style={[styles.actionText, { color: c.textSecondary }]}>-15</Text>
+    <Animated.View style={[styles.container, { transform: [{ translateY }] }]} pointerEvents="box-none">
+      <View style={[styles.pill, { backgroundColor: c.surface, borderColor: c.border }]}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => adjustTimer(-15)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={[styles.actionText, { color: c.textSecondary }]}>−15</Text>
         </TouchableOpacity>
 
-        <View style={styles.centerBlock}>
-          <FontAwesome name="hourglass-half" size={14} color={c.accent} style={{ marginBottom: 4 }} />
-          <Text style={[styles.timerText, { color: c.text }]}>{timeString}</Text>
-        </View>
+        <Text style={[styles.timerText, { color: c.text }]}>{timeString}</Text>
 
-        <TouchableOpacity style={styles.actionBtn} onPress={() => adjustTimer(15)}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => adjustTimer(15)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Text style={[styles.actionText, { color: c.textSecondary }]}>+15</Text>
         </TouchableOpacity>
 
-        <View style={styles.divider} />
-
-        <TouchableOpacity style={styles.closeBtn} onPress={stopTimer}>
-          <FontAwesome name="times" size={16} color={c.textTertiary} />
+        <TouchableOpacity
+          style={styles.closeBtn}
+          onPress={() => {
+            void Haptics.selectionAsync();
+            stopTimer();
+          }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <FontAwesome name="times" size={14} color={c.textTertiary} />
         </TouchableOpacity>
-
       </View>
     </Animated.View>
   );
 }
 
+export const FloatingRestTimer = memo(FloatingRestTimerComponent);
+
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 100, // Above the bottom bar
+    bottom: 96,
     left: 0,
     right: 0,
     alignItems: 'center',
@@ -78,50 +92,33 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 54,
-    borderRadius: 27,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
-  },
-  centerBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    gap: 8,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 6,
+    gap: 2,
   },
   timerText: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
     fontVariant: ['tabular-nums'],
+    minWidth: 52,
+    textAlign: 'center',
   },
   actionBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    minWidth: 44,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    paddingHorizontal: 8,
   },
   actionText: {
     fontSize: 14,
-    fontWeight: '700',
-  },
-  divider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    marginHorizontal: 8,
+    fontWeight: '600',
   },
   closeBtn: {
-    width: 40,
+    width: 36,
     height: 40,
-    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
