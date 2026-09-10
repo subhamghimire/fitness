@@ -18,6 +18,7 @@ import {
   getDailyActivity,
   getWeeklyWorkoutData,
 } from '@/utils/analytics';
+import { getWeeklySummary } from '@/utils/prs';
 import { SummaryCard } from '@/components/history/SummaryCard';
 import { HeatmapCalendar } from '@/components/history/HeatmapCalendar';
 import { WorkoutListItem } from '@/components/history/WorkoutListItem';
@@ -59,6 +60,7 @@ export default function HistoryScreen() {
   };
 
   const metrics = useMemo(() => getSummaryMetrics(workouts), [workouts]);
+  const weekSummary = useMemo(() => getWeeklySummary(workouts, unit), [workouts, unit]);
   const dailyActivity = useMemo(() => getDailyActivity(workouts), [workouts]);
   const heatmap = useMemo(() => generateHeatmapData(workouts), [workouts]);
   const weeklyWorkouts = useMemo(() => getWeeklyWorkoutData(workouts, 8), [workouts]);
@@ -113,6 +115,19 @@ export default function HistoryScreen() {
           colorHex={c.success}
           style={{ width: summaryCardWidth }}
         />
+      </View>
+
+      <View style={[styles.section, { backgroundColor: c.surface, marginBottom: 12 }]}>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: c.text }]}>This week</Text>
+        </View>
+        <Text style={[styles.weekLine, { color: c.text }]}>
+          {weekSummary.workouts} workouts · {weekSummary.workingSets} sets · {(weekSummary.volume / 1000).toFixed(1)}k {unit}
+          {weekSummary.prCount > 0 ? ` · ${weekSummary.prCount} PR${weekSummary.prCount === 1 ? '' : 's'}` : ''}
+        </Text>
+        {weekSummary.observations[0] ? (
+          <Text style={[styles.weekObs, { color: c.textSecondary }]}>{weekSummary.observations[0]}</Text>
+        ) : null}
       </View>
 
       <View style={[styles.section, { backgroundColor: c.surface }]}>
@@ -217,6 +232,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: -0.1,
+  },
+  weekLine: {
+    fontSize: 14,
+    fontWeight: '600',
+    paddingHorizontal: 14,
+    marginTop: 4,
+  },
+  weekObs: {
+    fontSize: 13,
+    fontWeight: '500',
+    paddingHorizontal: 14,
+    marginTop: 6,
+    lineHeight: 18,
   },
   insightCard: {
     flexDirection: 'row',

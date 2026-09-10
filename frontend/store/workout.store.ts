@@ -3,6 +3,7 @@ import { generateId } from '@/utils/uuid';
 import { getCurrentISOString } from '@/utils/date';
 import { WorkoutRepository } from '@/repositories/workout.repository';
 import { newSyncDefaults } from '@/db/syncColumns';
+import { suggestedRestSeconds } from '@/utils/progression';
 import type { Workout, SetData, SetLocal, Exercise, Template } from '@/types';
 
 interface WorkoutState {
@@ -82,13 +83,14 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     for (const ex of template.exercises) {
       const exId = generateId();
       const sync = newSyncDefaults();
+      const restSeconds = suggestedRestSeconds(ex.name);
       await WorkoutRepository.insertExercise({
         id: exId,
         workout_id: id,
         name: ex.name,
         order_index: orderIndex,
         notes: null,
-        rest_seconds: null,
+        rest_seconds: restSeconds,
         ...sync,
       });
 
@@ -122,7 +124,15 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         });
         setOrder++;
       }
-      exercises.push({ id: exId, workoutId: id, name: ex.name, orderIndex, notes: null, sets });
+      exercises.push({
+        id: exId,
+        workoutId: id,
+        name: ex.name,
+        orderIndex,
+        notes: null,
+        restSeconds,
+        sets,
+      });
       orderIndex++;
     }
 
@@ -166,19 +176,23 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     const id = generateId();
     const orderIndex = await WorkoutRepository.nextExerciseOrder(w.id);
     const sync = newSyncDefaults();
+    const restSeconds = suggestedRestSeconds(name);
     await WorkoutRepository.insertExercise({
       id,
       workout_id: w.id,
       name,
       order_index: orderIndex,
       notes: null,
-      rest_seconds: null,
+      rest_seconds: restSeconds,
       ...sync,
     });
     set({
       activeWorkout: {
         ...w,
-        exercises: [...w.exercises, { id, workoutId: w.id, name, orderIndex, notes: null, sets: [] }],
+        exercises: [
+          ...w.exercises,
+          { id, workoutId: w.id, name, orderIndex, notes: null, restSeconds, sets: [] },
+        ],
       },
     });
     get().loadPreviousSets(id, name);

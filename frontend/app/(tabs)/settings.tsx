@@ -8,6 +8,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuthStore } from '@/store/auth.store';
 import { useThemeStore, type ThemePreference } from '@/store/theme.store';
 import { useUnitStore, type WeightUnit } from '@/store/unit.store';
+import { usePreferencesStore } from '@/store/preferences.store';
+import type { ProgressionStyle } from '@/utils/progression';
 import { syncService } from '@/sync/sync.service';
 import { WorkoutRepository } from '@/repositories/workout.repository';
 import { SyncRepository } from '@/repositories/sync.repository';
@@ -27,6 +29,13 @@ const UNIT_OPTIONS: { key: WeightUnit; label: string }[] = [
   { key: 'lb', label: 'Pounds (lb)' },
 ];
 
+const PROGRESSION_OPTIONS: { key: ProgressionStyle; label: string; detail: string }[] = [
+  { key: 'double', label: 'Double progression', detail: 'Add reps, then weight' },
+  { key: 'weight', label: 'Weight progression', detail: 'Bump load when target reps hit' },
+  { key: 'reps', label: 'Rep progression', detail: 'Keep weight, push reps up' },
+  { key: 'manual', label: 'Manual', detail: 'No suggestions' },
+];
+
 export default function SettingsScreen() {
   const [unsyncedCount, setUnsyncedCount] = useState(0);
   const [totalWorkouts, setTotalWorkouts] = useState(0);
@@ -39,6 +48,7 @@ export default function SettingsScreen() {
   const { user, logout } = useAuthStore();
   const { mode, setMode } = useThemeStore();
   const { unit, setUnit } = useUnitStore();
+  const { progressionStyle, setProgressionStyle } = usePreferencesStore();
 
   const loadProfileStats = async () => {
     try {
@@ -214,6 +224,29 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+      <View style={[styles.themeCard, { backgroundColor: c.surface, borderColor: c.border }]}>
+        <Text style={[styles.sectionLabel, { color: c.textSecondary }]}>Progression</Text>
+        <View style={[styles.unitList, { backgroundColor: c.surfaceElevated, borderColor: c.border }]}>
+          {PROGRESSION_OPTIONS.map((opt) => {
+            const selected = progressionStyle === opt.key;
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                style={[styles.unitRow, selected && { backgroundColor: c.accentSoft }]}
+                onPress={() => setProgressionStyle(opt.key)}
+                activeOpacity={0.8}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.unitRowText, { color: selected ? c.accent : c.text }]}>{opt.label}</Text>
+                  <Text style={[styles.progDetail, { color: c.textTertiary }]}>{opt.detail}</Text>
+                </View>
+                {selected ? <Ionicons name="checkmark-circle" size={18} color={c.accent} /> : null}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
       <View style={[styles.actionsCard, { backgroundColor: c.surface, borderColor: c.border }]}> 
         <ActionRow
           icon="refresh"
@@ -306,6 +339,11 @@ const styles = StyleSheet.create({
   unitRowText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  progDetail: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
   },
   actionsCard: {
     borderRadius: 18,

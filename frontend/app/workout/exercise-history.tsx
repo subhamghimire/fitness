@@ -20,6 +20,7 @@ import {
   estimate1RM,
 } from '@/utils/prs';
 import { suggestProgression } from '@/utils/progression';
+import { usePreferencesStore } from '@/store/preferences.store';
 import { formatDate } from '@/utils/date';
 import type { Workout } from '@/types';
 
@@ -30,6 +31,7 @@ export default function ExerciseHistoryScreen() {
   const { name } = useLocalSearchParams<{ exerciseId?: string | string[]; name?: string | string[] }>();
   const title = Array.isArray(name) ? name[0] : name;
   const unit = useUnitStore((state) => state.unit);
+  const progressionStyle = usePreferencesStore((s) => s.progressionStyle);
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
 
@@ -73,9 +75,9 @@ export default function ExerciseHistoryScreen() {
   );
 
   const suggestion = useMemo(() => {
-    if (sessions.length === 0) return null;
-    return suggestProgression(sessions[0].sets);
-  }, [sessions]);
+    if (sessions.length === 0 || progressionStyle === 'manual') return null;
+    return suggestProgression(sessions[0].sets, progressionStyle);
+  }, [sessions, progressionStyle]);
 
   const onSelectRange = useCallback((r: Range) => setRange(r), []);
 

@@ -24,6 +24,7 @@ import { C } from '@/constants/Colors';
 import { suggestProgression, suggestedRestSeconds } from '@/utils/progression';
 import { detectNewPRs } from '@/utils/prs';
 import { WorkoutRepository } from '@/repositories/workout.repository';
+import { usePreferencesStore } from '@/store/preferences.store';
 import type { SetData, Workout } from '@/types';
 
 function ActiveWorkoutInner() {
@@ -32,6 +33,7 @@ function ActiveWorkoutInner() {
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
   const unit = useUnitStore((state) => state.unit);
+  const progressionStyle = usePreferencesStore((s) => s.progressionStyle);
   const { showPRs } = usePRToast();
 
   const activeWorkout = useWorkoutStore((s) => s.activeWorkout);
@@ -175,15 +177,15 @@ function ActiveWorkoutInner() {
 
   const progressionHints = useMemo(() => {
     const map: Record<string, string> = {};
-    if (!activeWorkout) return map;
+    if (!activeWorkout || progressionStyle === 'manual') return map;
     for (const ex of activeWorkout.exercises) {
       const prev = previousSets[ex.id];
       if (!prev?.length) continue;
-      const s = suggestProgression(prev);
+      const s = suggestProgression(prev, progressionStyle);
       if (s) map[ex.id] = s.summary;
     }
     return map;
-  }, [activeWorkout, previousSets]);
+  }, [activeWorkout, previousSets, progressionStyle]);
 
   if (isLoading && !activeWorkout) {
     return (
