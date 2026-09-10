@@ -1,6 +1,6 @@
 import React, { memo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
-import { FontAwesome, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { SetRow } from './SetRow';
 import { C } from '@/constants/Colors';
 import { useUnitStore } from '@/store/unit.store';
@@ -9,6 +9,8 @@ import type { Exercise, SetData } from '@/types';
 interface Props {
   exercise: Exercise;
   previousSets?: SetData[];
+  progressionHint?: string | null;
+  restSeconds?: number;
   onAddSet: () => void;
   onUpdateSet: (setId: string, data: Partial<Omit<SetData, 'id' | 'exerciseId'>>) => void;
   onDeleteSet: (setId: string) => void;
@@ -16,12 +18,15 @@ interface Props {
   onOpenExerciseMenu: () => void;
   onPressExerciseTitle?: () => void;
   onUpdateNotes?: (notes: string) => void;
+  onSetCompleted?: (setId: string) => void;
   isDark?: boolean;
 }
 
 function ExerciseCardComponent({
   exercise,
   previousSets,
+  progressionHint,
+  restSeconds = 90,
   onAddSet,
   onUpdateSet,
   onDeleteSet,
@@ -29,6 +34,7 @@ function ExerciseCardComponent({
   onOpenExerciseMenu,
   onPressExerciseTitle,
   onUpdateNotes,
+  onSetCompleted,
   isDark = false,
 }: Props) {
   const c = isDark ? C.dark : C.light;
@@ -53,6 +59,11 @@ function ExerciseCardComponent({
               {exercise.name}
             </Text>
           </TouchableOpacity>
+          {progressionHint ? (
+            <Text style={[styles.hint, { color: c.textSecondary }]} numberOfLines={2}>
+              {progressionHint}
+            </Text>
+          ) : null}
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity
@@ -109,7 +120,11 @@ function ExerciseCardComponent({
               set={s}
               setNumber={isWorking ? workingSetCount : 0}
               previousSet={prevSet}
-              onUpdate={(d) => onUpdateSet(s.id, d)}
+              restSeconds={restSeconds}
+              onUpdate={(d) => {
+                onUpdateSet(s.id, d);
+                if (d.isCompleted === true) onSetCompleted?.(s.id);
+              }}
               onDelete={() => onDeleteSet(s.id)}
               onCycleSetType={() => onCycleSetType(s.id)}
               isDark={isDark}
@@ -149,6 +164,12 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     letterSpacing: -0.2,
+  },
+  hint: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 4,
+    lineHeight: 16,
   },
   headerActions: {
     flexDirection: 'row',

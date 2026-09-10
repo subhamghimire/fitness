@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,17 +17,22 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { WorkoutTimer } from '@/components/WorkoutTimer';
 import { ExerciseCard } from '@/components/ExerciseCard';
 import { FloatingRestTimer } from '@/components/FloatingRestTimer';
+import { PRToastProvider, usePRToast } from '@/components/PRToast';
 import { syncService } from '@/sync/sync.service';
 import { workoutNotificationService } from '@/services/workoutNotification.service';
 import { C } from '@/constants/Colors';
-import type { SetData } from '@/types';
+import { suggestProgression, suggestedRestSeconds } from '@/utils/progression';
+import { detectNewPRs } from '@/utils/prs';
+import { WorkoutRepository } from '@/repositories/workout.repository';
+import type { SetData, Workout } from '@/types';
 
-export default function ActiveWorkoutScreen() {
+function ActiveWorkoutInner() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
   const unit = useUnitStore((state) => state.unit);
+  const { showPRs } = usePRToast();
 
   const activeWorkout = useWorkoutStore((s) => s.activeWorkout);
   const isLoading = useWorkoutStore((s) => s.isLoading);
@@ -43,9 +48,15 @@ export default function ActiveWorkoutScreen() {
   const cancelWorkout = useWorkoutStore((s) => s.cancelWorkout);
 
   const notifyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyRef = useRef<Workout[]>([]);
 
   useEffect(() => {
     loadActiveWorkout();
+    WorkoutRepository.getHistory(150, 0)
+      .then((h) => {
+        historyRef.current = h;
+      })
+      .catch(() => undefined);
   }, [loadActiveWorkout]);
 
   useEffect(() => {
@@ -59,7 +70,6 @@ export default function ActiveWorkoutScreen() {
     };
   }, [activeWorkout?.id, unit]);
 
-  // Debounced notification updates — avoid thrashing on every keystroke
   useEffect(() => {
     if (!activeWorkout) return;
     if (notifyTimer.current) clearTimeout(notifyTimer.current);
@@ -82,11 +92,12 @@ export default function ActiveWorkoutScreen() {
       {
         text: 'Finish',
         onPress: async () => {
+          const finishedId = activeWorkout.id;
           try {
             void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             await workoutNotificationService.stop();
             await endWorkout();
-            router.replace('/(tabs)');
+            router.replace(`/workout/summary/${finishedId}`);
             try {
               void syncService.maybeSync('workout_completed', true);
             } catch {
@@ -120,38 +131,6 @@ export default function ActiveWorkoutScreen() {
     ]);
   }, [cancelWorkout, router]);
 
-  const handleExerciseHistory = useCallback(
-    (exerciseId: string, name: string) => {
-      router.push({ pathname: '/workout/exercise-history', params: { exerciseId, name } });
-    },
-    [router]
-  );
-
-  const handleReplaceExercise = useCallback(
-    (exerciseId: string, name: string) => {
-      router.push({
-        pathname: '/workout/exercise-picker',
-        params: { replaceExerciseId: exerciseId, currentName: name },
-      });
-    },
-    [router]
-  );
-
-  const handleExerciseActions = useCallback(
-    (exerciseId: string, name: string) => {
-      Alert.alert(name, undefined, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Replace', onPress: () => handleReplaceExercise(exerciseId, name) },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => removeExercise(exerciseId),
-        },
-      ]);
-    },
-    [handleReplaceExercise, removeExercise]
-  );
-
   const onUpdateSet = useCallback(
     (setId: string, data: Partial<Omit<SetData, 'id' | 'exerciseId'>>) => {
       void updateSet(setId, data);
@@ -173,7 +152,39 @@ export default function ActiveWorkoutScreen() {
     [cycleSetType]
   );
 
-  // Instant paint when workout already in memory (e.g. navigating from home)
+  const handleSetCompleted = useCallback(
+    (exerciseId: string) => {
+      const w = useWorkoutStore.getState().activeWorkout;
+      if (!w) return;
+      const ex = w.exercises.find((e) => e.id === exerciseId);
+      if (!ex) return;
+      // Defer PR check — never block set logging
+      setTimeout(() => {
+        const prs = detectNewPRs({
+          exerciseName: ex.name,
+          currentSets: ex.sets,
+          history: historyRef.current,
+          currentWorkoutId: w.id,
+          unit,
+        });
+        if (prs.length > 0) showPRs(prs);
+      }, 0);
+    },
+    [showPRs, unit]
+  );
+
+  const progressionHints = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (!activeWorkout) return map;
+    for (const ex of activeWorkout.exercises) {
+      const prev = previousSets[ex.id];
+      if (!prev?.length) continue;
+      const s = suggestProgression(prev);
+      if (s) map[ex.id] = s.summary;
+    }
+    return map;
+  }, [activeWorkout, previousSets]);
+
   if (isLoading && !activeWorkout) {
     return (
       <View style={[styles.center, { backgroundColor: c.background }]}>
@@ -216,9 +227,17 @@ export default function ActiveWorkoutScreen() {
             </View>
           ),
           headerRight: () => (
-            <TouchableOpacity onPress={handleFinish} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={[styles.headerBtnText, { color: c.accent }]}>Finish</Text>
-            </TouchableOpacity>
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                onPress={() => router.push('/workout/plates')}
+                hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+              >
+                <FontAwesome name="circle-o" size={16} color={c.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleFinish} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={[styles.headerBtnText, { color: c.accent }]}>Finish</Text>
+              </TouchableOpacity>
+            </View>
           ),
         }}
       />
@@ -235,24 +254,54 @@ export default function ActiveWorkoutScreen() {
             {activeWorkout.exercises.length} exercise{activeWorkout.exercises.length !== 1 ? 's' : ''}
           </Text>
 
-          {activeWorkout.exercises.map((exercise) => (
-            <ExerciseCard
-              key={exercise.id}
-              exercise={exercise}
-              previousSets={previousSets[exercise.id]}
-              onAddSet={() => {
-                void Haptics.selectionAsync();
-                void addSet(exercise.id);
-              }}
-              onUpdateSet={onUpdateSet}
-              onDeleteSet={onDeleteSet}
-              onCycleSetType={onCycleSetType}
-              onUpdateNotes={(text) => void updateExercise(exercise.id, { notes: text })}
-              onOpenExerciseMenu={() => handleExerciseActions(exercise.id, exercise.name)}
-              onPressExerciseTitle={() => handleExerciseHistory(exercise.id, exercise.name)}
-              isDark={isDark}
-            />
-          ))}
+          {activeWorkout.exercises.map((exercise) => {
+            const rest =
+              exercise.restSeconds ??
+              suggestedRestSeconds(exercise.name);
+            return (
+              <ExerciseCard
+                key={exercise.id}
+                exercise={exercise}
+                previousSets={previousSets[exercise.id]}
+                progressionHint={progressionHints[exercise.id]}
+                restSeconds={rest}
+                onAddSet={() => {
+                  void Haptics.selectionAsync();
+                  void addSet(exercise.id);
+                }}
+                onUpdateSet={onUpdateSet}
+                onDeleteSet={onDeleteSet}
+                onCycleSetType={onCycleSetType}
+                onUpdateNotes={(text) => void updateExercise(exercise.id, { notes: text })}
+                onOpenExerciseMenu={() =>
+                  Alert.alert(exercise.name, undefined, [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Replace',
+                      onPress: () =>
+                        router.push({
+                          pathname: '/workout/exercise-picker',
+                          params: { replaceExerciseId: exercise.id, currentName: exercise.name },
+                        }),
+                    },
+                    {
+                      text: 'Remove',
+                      style: 'destructive',
+                      onPress: () => removeExercise(exercise.id),
+                    },
+                  ])
+                }
+                onPressExerciseTitle={() =>
+                  router.push({
+                    pathname: '/workout/exercise-history',
+                    params: { exerciseId: exercise.id, name: exercise.name },
+                  })
+                }
+                onSetCompleted={() => handleSetCompleted(exercise.id)}
+                isDark={isDark}
+              />
+            );
+          })}
 
           {activeWorkout.exercises.length === 0 && (
             <View style={styles.emptyExercise}>
@@ -281,6 +330,14 @@ export default function ActiveWorkoutScreen() {
   );
 }
 
+export default function ActiveWorkoutScreen() {
+  return (
+    <PRToastProvider>
+      <ActiveWorkoutInner />
+    </PRToastProvider>
+  );
+}
+
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 14 },
   container: { flex: 1 },
@@ -288,6 +345,7 @@ const styles = StyleSheet.create({
   backBtn: { paddingHorizontal: 18, paddingVertical: 11, borderRadius: 10 },
   backBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   headerBtnText: { fontSize: 16, fontWeight: '600', paddingHorizontal: 4 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   timerContainer: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   timerDot: { width: 7, height: 7, borderRadius: 4 },
   scroll: { flex: 1 },

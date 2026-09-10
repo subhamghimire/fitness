@@ -20,13 +20,22 @@ interface Props {
   set: SetData;
   setNumber: number;
   previousSet?: SetData;
+  restSeconds?: number;
   onUpdate: (data: Partial<Omit<SetData, 'id' | 'exerciseId'>>) => void;
   onDelete: () => void;
   onCycleSetType?: () => void;
   isDark?: boolean;
 }
 
-function SetRowComponent({ set, setNumber, previousSet, onUpdate, onDelete, isDark = false }: Props) {
+function SetRowComponent({
+  set,
+  setNumber,
+  previousSet,
+  restSeconds = 90,
+  onUpdate,
+  onDelete,
+  isDark = false,
+}: Props) {
   const [weight, setWeight] = useState(set.weight?.toString() ?? '');
   const [reps, setReps] = useState(set.reps?.toString() ?? '');
   const [showTypeSelector, setShowTypeSelector] = useState(false);
@@ -120,7 +129,7 @@ function SetRowComponent({ set, setNumber, previousSet, onUpdate, onDelete, isDa
     if (willComplete) {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       Keyboard.dismiss();
-      startTimer(60);
+      startTimer(restSeconds);
     } else {
       void Haptics.selectionAsync();
     }

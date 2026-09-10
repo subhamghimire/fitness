@@ -17,10 +17,13 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { formatDate, formatDuration } from '@/utils/date';
 import { WorkoutTimer } from '@/components/WorkoutTimer';
 import { C } from '@/constants/Colors';
+import { getWeeklySummary } from '@/utils/prs';
 import type { Workout } from '@/types';
+import type { WeeklySummary } from '@/utils/prs';
 
 export default function HomeScreen() {
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
+  const [weekSummary, setWeekSummary] = useState<WeeklySummary | null>(null);
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -36,8 +39,9 @@ export default function HomeScreen() {
 
   const loadRecentWorkouts = async () => {
     try {
-      const workouts = await WorkoutRepository.getHistory(5, 0);
-      setRecentWorkouts(workouts);
+      const workouts = await WorkoutRepository.getHistory(80, 0);
+      setRecentWorkouts(workouts.slice(0, 5));
+      setWeekSummary(getWeeklySummary(workouts));
     } catch (error) {
       console.error('Failed to load recent workouts:', error);
     }
@@ -117,22 +121,30 @@ export default function HomeScreen() {
 
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: c.text }]}>{weekWorkouts.length}</Text>
+          <Text style={[styles.statValue, { color: c.text }]}>{weekSummary?.workouts ?? weekWorkouts.length}</Text>
           <Text style={[styles.statLabel, { color: c.textSecondary }]}>This week</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: c.border }]} />
         <View style={styles.statItem}>
           <Text style={[styles.statValue, { color: c.text }]}>
-            {weekWorkouts.reduce((s, w) => s + getTotalSets(w), 0)}
+            {weekSummary?.workingSets ?? weekWorkouts.reduce((s, w) => s + getTotalSets(w), 0)}
           </Text>
           <Text style={[styles.statLabel, { color: c.textSecondary }]}>Sets</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: c.border }]} />
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: c.text }]}>{recentWorkouts.length}</Text>
-          <Text style={[styles.statLabel, { color: c.textSecondary }]}>Recent</Text>
+          <Text style={[styles.statValue, { color: c.text }]}>
+            {weekSummary ? `${(weekSummary.volume / 1000).toFixed(1)}k` : recentWorkouts.length}
+          </Text>
+          <Text style={[styles.statLabel, { color: c.textSecondary }]}>
+            {weekSummary ? 'Volume' : 'Recent'}
+          </Text>
         </View>
       </View>
+
+      {weekSummary && weekSummary.observations[0] ? (
+        <Text style={[styles.weekNote, { color: c.textSecondary }]}>{weekSummary.observations[0]}</Text>
+      ) : null}
 
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: c.text }]}>Recent</Text>
@@ -218,6 +230,7 @@ const styles = StyleSheet.create({
   statDivider: { width: StyleSheet.hairlineWidth, height: 28 },
   statValue: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
   statLabel: { fontSize: 11, fontWeight: '500', marginTop: 2 },
+  weekNote: { fontSize: 13, fontWeight: '500', marginBottom: 16, lineHeight: 18 },
   section: { gap: 0 },
   sectionTitle: { fontSize: 17, fontWeight: '700', marginBottom: 8 },
   emptyBlock: { alignItems: 'center', paddingVertical: 28, gap: 6 },

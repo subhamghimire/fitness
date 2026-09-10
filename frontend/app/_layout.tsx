@@ -4,6 +4,7 @@ import { initDatabase } from '@/db/database';
 import { useAuthStore } from '@/store/auth.store';
 import { useThemeStore } from '@/store/theme.store';
 import { useUnitStore } from '@/store/unit.store';
+import { usePreferencesStore } from '@/store/preferences.store';
 import { useWorkoutStore } from '@/store/workout.store';
 import { syncService } from '@/sync/sync.service';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
@@ -23,6 +24,7 @@ export default function RootLayout() {
     (async () => {
       await useThemeStore.getState().initialize();
       await useUnitStore.getState().initialize();
+      await usePreferencesStore.getState().initialize();
       await initDatabase();
       await useAuthStore.getState().initialize();
       await useWorkoutStore.getState().loadActiveWorkout();

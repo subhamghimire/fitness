@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { useWorkoutStore } from '@/store/workout.store';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
+import { WorkoutRepository } from '@/repositories/workout.repository';
 
 const CATEGORIES: { label: string; icon: string; exercises: string[] }[] = [
   { label: 'Chest', icon: 'heart', exercises: ['Bench Press', 'Incline Bench Press', 'Decline Bench Press', 'Dumbbell Press', 'Dumbbell Fly', 'Cable Fly', 'Push Up', 'Chest Dip'] },
@@ -34,6 +35,7 @@ export default function ExercisePickerScreen() {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [custom, setCustom] = useState('');
+  const [recent, setRecent] = useState<string[]>([]);
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
@@ -42,6 +44,12 @@ export default function ExercisePickerScreen() {
   const updateExercise = useWorkoutStore((s) => s.updateExercise);
   const loadPreviousSets = useWorkoutStore((s) => s.loadPreviousSets);
   const isReplaceMode = !!replaceExerciseId;
+
+  useEffect(() => {
+    WorkoutRepository.recentExerciseNames(12)
+      .then(setRecent)
+      .catch(() => undefined);
+  }, []);
 
   const handleSelect = useCallback(
     async (name: string) => {
@@ -120,6 +128,18 @@ export default function ExercisePickerScreen() {
             />
           </View>
         </View>
+
+        {search.length === 0 && recent.length > 0 && (
+          <View style={styles.recentBlock}>
+            <Text style={[styles.recentLabel, { color: c.textTertiary }]}>Recent</Text>
+            {recent.slice(0, 6).map((name) => (
+              <TouchableOpacity key={name} style={styles.exItem} onPress={() => handleSelect(name)} activeOpacity={0.55}>
+                <Text style={[styles.exName, { color: c.text }]}>{name}</Text>
+                <FontAwesome name="plus" size={12} color={c.accent} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {search.length === 0 && (
           <FlatList
@@ -210,6 +230,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipText: { fontSize: 13, fontWeight: '600' },
+  recentBlock: { paddingHorizontal: 8, marginBottom: 4 },
+  recentLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+  },
   customRow: {
     flexDirection: 'row',
     gap: 8,

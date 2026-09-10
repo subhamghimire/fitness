@@ -8,26 +8,11 @@ export default function WorkoutLayout() {
         headerTitleAlign: 'center',
       }}
     >
-      <Stack.Screen
-        name="[id]"
-        options={{
-          title: 'Workout',
-          headerBackTitle: 'Back',
-        }}
-      />
-      <Stack.Screen
-        name="exercise-picker"
-        options={{
-          title: 'Add Exercise',
-          presentation: 'modal',
-        }}
-      />
-      <Stack.Screen
-        name="exercise-history"
-        options={{
-          title: 'Exercise History',
-        }}
-      />
+      <Stack.Screen name="[id]" options={{ title: 'Workout', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="exercise-picker" options={{ title: 'Add Exercise', presentation: 'modal' }} />
+      <Stack.Screen name="exercise-history" options={{ title: 'Exercise History' }} />
+      <Stack.Screen name="summary/[id]" options={{ title: 'Workout complete', presentation: 'modal' }} />
+      <Stack.Screen name="plates" options={{ title: 'Plate calculator', presentation: 'modal' }} />
     </Stack>
   );
 }

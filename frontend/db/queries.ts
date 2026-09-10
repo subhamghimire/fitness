@@ -444,3 +444,29 @@ export async function countPendingChanges(): Promise<number> {
   }
   return total;
 }
+
+export async function updateExerciseRestSeconds(id: string, restSeconds: number): Promise<void> {
+  const db = getDatabase();
+  const current = await db.getFirstAsync<{ revision: number }>(`SELECT revision FROM exercises_local WHERE id = ?`, [id]);
+  const touch = touchPending(current?.revision ?? 0);
+  await db.runAsync(
+    `UPDATE exercises_local SET rest_seconds = ?, updated_at = ?, local_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
+    [restSeconds, touch.updated_at, touch.local_updated_at, touch.sync_status, touch.revision, id]
+  );
+}
+
+/** Distinct exercise names ordered by most recent use (completed workouts). */
+export async function getRecentExerciseNames(limit = 16): Promise<string[]> {
+  const rows = await getDatabase().getAllAsync<{ name: string; last_at: string }>(
+    `SELECT e.name as name, MAX(w.started_at) as last_at
+     FROM exercises_local e
+     JOIN workouts_local w ON w.id = e.workout_id
+     WHERE w.status = 'completed' AND w.deleted_at IS NULL AND e.deleted_at IS NULL
+     GROUP BY LOWER(TRIM(e.name))
+     ORDER BY last_at DESC
+     LIMIT ?`,
+    [limit]
+  );
+  return rows.map((r) => r.name);
+}
+

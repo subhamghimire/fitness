@@ -25,6 +25,8 @@ export const WorkoutRepository = {
   deleteSet: (id: string) => queries.deleteSet(id),
   nextSetOrder: (exerciseId: string) => queries.getNextSetOrderIndex(exerciseId),
   previousSets: (name: string, currentWorkoutId: string) => queries.getPreviousExerciseSets(name, currentWorkoutId),
+  updateRestSeconds: (id: string, restSeconds: number) => queries.updateExerciseRestSeconds(id, restSeconds),
+  recentExerciseNames: (limit?: number) => queries.getRecentExerciseNames(limit),
 
   createLocalWorkoutRow(partial: {
     id: string;
