@@ -6,7 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useWorkoutStore } from '@/store/workout.store';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
-import { getAllTemplates, deleteTemplate } from '@/db/templateQueries';
+import { TemplateRepository } from '@/repositories/template.repository';
 import type { Template } from '@/types';
 
 export default function TemplatesScreen() {
@@ -20,7 +20,7 @@ export default function TemplatesScreen() {
   const loadTemplates = async () => {
     setLoading(true);
     try {
-      const data = await getAllTemplates();
+      const data = await TemplateRepository.getAll();
       setTemplates(data);
     } catch (e) {
       console.error(e);
@@ -68,7 +68,7 @@ export default function TemplatesScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteTemplate(template.id);
+              await TemplateRepository.softDelete(template.id);
               setTemplates((prev) => prev.filter((item) => item.id !== template.id));
             } catch (error) {
               Alert.alert('Delete Failed', 'Unable to delete this template.');

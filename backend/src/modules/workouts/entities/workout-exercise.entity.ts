@@ -23,6 +23,13 @@ export class WorkoutExercise extends AbstractEntity {
   @Column({ name: "rest_seconds", type: "int", nullable: true })
   restSeconds: number | null;
 
+  /** Denormalized exercise name from client for sync without catalog dependency */
+  @Column({ type: "varchar", length: 200, nullable: true })
+  name: string | null;
+
+  @Column({ type: "int", default: 1 })
+  revision: number;
+
   @ManyToOne(() => Workout, (w) => w.workoutExercises, { onDelete: "CASCADE" })
   @JoinColumn({ name: "workout_id" })
   workout: Workout;

@@ -11,7 +11,7 @@ import { useRouter } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import { useWorkoutStore } from '@/store/workout.store';
 import { useAuthStore } from '@/store/auth.store';
-import { getAllWorkouts } from '@/db/queries';
+import { WorkoutRepository } from '@/repositories/workout.repository';
 import { useColorScheme } from '@/components/useColorScheme';
 import { formatDate, formatDuration } from '@/utils/date';
 import { WorkoutTimer } from '@/components/WorkoutTimer';
@@ -35,8 +35,8 @@ export default function HomeScreen() {
 
   const loadRecentWorkouts = async () => {
     try {
-      const workouts = await getAllWorkouts();
-      setRecentWorkouts(workouts.slice(0, 5));
+      const workouts = await WorkoutRepository.getHistory(5, 0);
+      setRecentWorkouts(workouts);
     } catch (error) {
       console.error('Failed to load recent workouts:', error);
     }
@@ -149,9 +149,13 @@ export default function HomeScreen() {
             <View key={workout.id} style={[styles.workoutCard, { backgroundColor: c.surface, borderColor: c.border }]}>
               <View style={styles.workoutCardHead}>
                 <Text style={[styles.workoutDate, { color: c.text }]}>{formatDate(workout.startedAt)}</Text>
-                {workout.status === 'synced' ? (
+                {workout.syncStatus === 'synced' ? (
                   <View style={[styles.badge, { backgroundColor: c.successSoft }]}>
                     <Text style={[styles.badgeText, { color: c.success }]}>⬆ Synced</Text>
+                  </View>
+                ) : workout.syncStatus === 'pending' ? (
+                  <View style={[styles.badge, { backgroundColor: c.surfaceElevated }]}>
+                    <Text style={[styles.badgeText, { color: c.textSecondary }]}>Pending</Text>
                   </View>
                 ) : null}
               </View>

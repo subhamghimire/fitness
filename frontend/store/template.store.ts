@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { generateId } from '@/utils/uuid';
-import { insertTemplate, insertTemplateExercise, insertTemplateSet } from '@/db/templateQueries';
+import { TemplateRepository } from '@/repositories/template.repository';
 import type { TemplateExercise, TemplateSet } from '@/types';
 
 interface DraftTemplate {
@@ -26,7 +26,7 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
   draftTemplate: null,
 
   initDraft: () => set({ draftTemplate: { name: '', exercises: [] } }),
-  
+
   setDraftName: (name) => {
     const draft = get().draftTemplate;
     if (draft) set({ draftTemplate: { ...draft, name } });
@@ -37,7 +37,11 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
     if (!draft) return '';
     const id = generateId();
     const newEx: TemplateExercise = {
-      id, templateId: '', name, orderIndex: draft.exercises.length, sets: []
+      id,
+      templateId: '',
+      name,
+      orderIndex: draft.exercises.length,
+      sets: [],
     };
     set({ draftTemplate: { ...draft, exercises: [...draft.exercises, newEx] } });
     return id;
@@ -46,26 +50,31 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
   removeExercise: (exerciseId) => {
     const draft = get().draftTemplate;
     if (!draft) return;
-    set({ draftTemplate: { ...draft, exercises: draft.exercises.filter(e => e.id !== exerciseId) } });
+    set({ draftTemplate: { ...draft, exercises: draft.exercises.filter((e) => e.id !== exerciseId) } });
   },
 
   addSet: (exerciseId) => {
     const draft = get().draftTemplate;
     if (!draft) return;
-    const ex = draft.exercises.find(e => e.id === exerciseId);
+    const ex = draft.exercises.find((e) => e.id === exerciseId);
     if (!ex) return;
-    
+
     const last = ex.sets[ex.sets.length - 1];
     const newSet: TemplateSet = {
-      id: generateId(), weight: last?.weight ?? null, reps: last?.reps ?? null,
-      isWarmup: false, isDropset: false, isFailure: false
+      id: generateId(),
+      weight: last?.weight ?? null,
+      reps: last?.reps ?? null,
+      isWarmup: false,
+      isDropset: false,
+      isFailure: false,
+      orderIndex: ex.sets.length,
     };
-    
+
     set({
       draftTemplate: {
         ...draft,
-        exercises: draft.exercises.map(e => e.id === exerciseId ? { ...e, sets: [...e.sets, newSet] } : e)
-      }
+        exercises: draft.exercises.map((e) => (e.id === exerciseId ? { ...e, sets: [...e.sets, newSet] } : e)),
+      },
     });
   },
 
@@ -75,10 +84,11 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
     set({
       draftTemplate: {
         ...draft,
-        exercises: draft.exercises.map(ex => ({
-          ...ex, sets: ex.sets.map(s => s.id === setId ? { ...s, ...data } : s)
-        }))
-      }
+        exercises: draft.exercises.map((ex) => ({
+          ...ex,
+          sets: ex.sets.map((s) => (s.id === setId ? { ...s, ...data } : s)),
+        })),
+      },
     });
   },
 
@@ -88,10 +98,11 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
     set({
       draftTemplate: {
         ...draft,
-        exercises: draft.exercises.map(ex => ({
-          ...ex, sets: ex.sets.filter(s => s.id !== setId)
-        }))
-      }
+        exercises: draft.exercises.map((ex) => ({
+          ...ex,
+          sets: ex.sets.filter((s) => s.id !== setId),
+        })),
+      },
     });
   },
 
@@ -100,7 +111,7 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
     if (!draft) return;
     let target: TemplateSet | undefined;
     for (const ex of draft.exercises) {
-      target = ex.sets.find(s => s.id === setId);
+      target = ex.sets.find((s) => s.id === setId);
       if (target) break;
     }
     if (!target) return;
@@ -115,24 +126,47 @@ export const useTemplateStore = create<TemplateState>((set, get) => ({
   saveDraft: async () => {
     const draft = get().draftTemplate;
     if (!draft || !draft.name.trim() || draft.exercises.length === 0) return;
-    
+
     const templateId = generateId();
-    await insertTemplate({ id: templateId, name: draft.name.trim(), created_at: new Date().toISOString() });
-    
+    const createdAt = new Date().toISOString();
+    await TemplateRepository.insert(
+      TemplateRepository.createLocalTemplateRow({
+        id: templateId,
+        name: draft.name.trim(),
+        created_at: createdAt,
+      })
+    );
+
     let exOrder = 0;
     for (const ex of draft.exercises) {
       const exId = generateId();
-      await insertTemplateExercise({ id: exId, template_id: templateId, name: ex.name, order_index: exOrder++ });
-      
+      await TemplateRepository.insertExercise(
+        TemplateRepository.createLocalExerciseRow({
+          id: exId,
+          template_id: templateId,
+          name: ex.name,
+          order_index: exOrder++,
+        })
+      );
+
+      let setOrder = 0;
       for (const s of ex.sets) {
-        await insertTemplateSet({
-          id: generateId(), template_exercise_id: exId, weight: s.weight, reps: s.reps,
-          is_warmup: s.isWarmup ? 1 : 0, is_dropset: s.isDropset ? 1 : 0, is_failure: s.isFailure ? 1 : 0
-        });
+        await TemplateRepository.insertSet(
+          TemplateRepository.createLocalSetRow({
+            id: generateId(),
+            template_exercise_id: exId,
+            order_index: setOrder++,
+            weight: s.weight,
+            reps: s.reps,
+            is_warmup: s.isWarmup ? 1 : 0,
+            is_dropset: s.isDropset ? 1 : 0,
+            is_failure: s.isFailure ? 1 : 0,
+          })
+        );
       }
     }
     get().clearDraft();
   },
 
-  clearDraft: () => set({ draftTemplate: null })
+  clearDraft: () => set({ draftTemplate: null }),
 }));

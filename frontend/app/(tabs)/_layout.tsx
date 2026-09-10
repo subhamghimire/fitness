@@ -3,7 +3,8 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
+import { SyncIndicator } from '@/components/SyncIndicator';
 
 function TabIcon(props: { name: React.ComponentProps<typeof FontAwesome>['name']; color: string }) {
   return <FontAwesome size={22} {...props} />;
@@ -50,6 +51,11 @@ export default function TabLayout() {
           fontSize: 17,
           fontWeight: '700',
         },
+        headerRight: () => (
+          <View style={{ marginRight: 12 }}>
+            <SyncIndicator />
+          </View>
+        ),
       }}
     >
       <Tabs.Screen

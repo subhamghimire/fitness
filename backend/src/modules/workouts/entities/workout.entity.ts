@@ -24,6 +24,9 @@ export class Workout extends AbstractEntity {
   @Column({ name: "duration_seconds", type: "int", nullable: true })
   durationSeconds: number | null;
 
+  @Column({ type: "int", default: 1 })
+  revision: number;
+
   @ManyToOne(() => User, (u) => u.workouts, { onDelete: "CASCADE" })
   @JoinColumn({ name: "user_id" })
   user: User;

@@ -35,6 +35,9 @@ export class Set extends AbstractEntity {
   @Column({ type: "float", nullable: true })
   distance: number | null;
 
+  @Column({ type: "int", default: 1 })
+  revision: number;
+
   @ManyToOne(() => WorkoutExercise, (we) => we.sets, { onDelete: "CASCADE" })
   @JoinColumn({ name: "workout_exercise_id" })
   workoutExercise: WorkoutExercise;

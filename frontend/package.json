@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test": "jest"
   },
   "dependencies": {
     "@expo/vector-icons": "~14.0.4",
@@ -42,9 +43,12 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@types/jest": "^30.0.0",
     "@types/react": "~18.3.12",
     "@types/uuid": "^10.0.0",
+    "jest": "^30.5.1",
     "sharp": "^0.34.5",
+    "ts-jest": "^29.4.12",
     "typescript": "^5.3.3"
   },
   "private": true

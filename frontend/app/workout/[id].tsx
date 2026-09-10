@@ -58,7 +58,7 @@ export default function ActiveWorkoutScreen() {
             await endWorkout();
             router.replace('/(tabs)');
             // Fire-and-forget sync so a sync error can't block finishing workout.
-            try { syncService.triggerSync(); } catch { /* noop */ }
+            try { void syncService.maybeSync('workout_completed', true); } catch { /* noop */ }
           } catch (error) {
             const message = error instanceof Error && error.message ? error.message : 'Please try again.';
             Alert.alert('Could not finish workout', message);

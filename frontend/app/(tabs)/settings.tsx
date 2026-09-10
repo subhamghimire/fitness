@@ -9,7 +9,8 @@ import { useAuthStore } from '@/store/auth.store';
 import { useThemeStore, type ThemePreference } from '@/store/theme.store';
 import { useUnitStore, type WeightUnit } from '@/store/unit.store';
 import { syncService } from '@/sync/sync.service';
-import { getAllWorkouts, getCompletedUnsyncedWorkouts } from '@/db/queries';
+import { WorkoutRepository } from '@/repositories/workout.repository';
+import { SyncRepository } from '@/repositories/sync.repository';
 import { resetDatabase } from '@/db/database';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
@@ -41,7 +42,7 @@ export default function SettingsScreen() {
 
   const loadProfileStats = async () => {
     try {
-      const workouts = await getAllWorkouts();
+      const workouts = await WorkoutRepository.getHistory(500, 0);
       const metrics = getSummaryMetrics(workouts);
       setTotalWorkouts(metrics.totalWorkouts);
       setTotalVolume(metrics.totalVolume);
@@ -64,7 +65,7 @@ export default function SettingsScreen() {
 
   const loadCount = async () => {
     try {
-      setUnsyncedCount((await getCompletedUnsyncedWorkouts()).length);
+      setUnsyncedCount(await SyncRepository.countPending());
     } catch {
       // noop
     }
@@ -73,10 +74,12 @@ export default function SettingsScreen() {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const r = await syncService.syncCompletedWorkouts();
+      const r = await syncService.syncNow('manual');
       Alert.alert(
         r.success ? 'Sync Complete' : 'Sync Failed',
-        r.success ? `Synced ${r.syncedWorkoutIds.length} workout(s)` : r.errors.join('\n')
+        r.success
+          ? `Synced ${r.syncedWorkoutIds.length} workout(s)`
+          : r.errors.join('\n') || 'Please try again'
       );
       await loadCount();
     } catch {

@@ -5,7 +5,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
 import { useUnitStore } from '@/store/unit.store';
-import { getWorkoutById } from '@/db/queries';
+import { WorkoutRepository } from '@/repositories/workout.repository';
 import type { Workout } from '@/types';
 import { formatDate, formatDuration } from '@/utils/date';
 
@@ -20,7 +20,7 @@ export default function WorkoutDetailScreen() {
 
   useEffect(() => {
     if (typeof id === 'string') {
-      getWorkoutById(id).then(setWorkout).catch(console.error);
+      WorkoutRepository.getById(id).then(setWorkout).catch(console.error);
     }
   }, [id]);
 

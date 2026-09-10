@@ -5,7 +5,7 @@ import {
 import { FontAwesome } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import { getAllWorkouts } from '@/db/queries';
+import { WorkoutRepository } from '@/repositories/workout.repository';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
 import { useUnitStore } from '@/store/unit.store';
@@ -42,7 +42,7 @@ export default function HistoryScreen() {
 
   const loadWorkouts = async () => {
     try {
-      const w = await getAllWorkouts();
+      const w = await WorkoutRepository.getHistory(500, 0);
       setWorkouts(w);
     } catch (e) {
       Alert.alert('History Error', String(e));
