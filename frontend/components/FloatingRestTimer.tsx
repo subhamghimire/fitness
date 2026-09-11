@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTimerStore } from '@/store/timer.store';
 import { C } from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -13,6 +14,7 @@ function FloatingRestTimerComponent() {
   const adjustTimer = useTimerStore((s) => s.adjustTimer);
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
+  const insets = useSafeAreaInsets();
 
   const translateY = useRef(new Animated.Value(120)).current;
   const [mounted, setMounted] = useState(false);
@@ -43,7 +45,13 @@ function FloatingRestTimerComponent() {
   const timeString = `${min}:${sec < 10 ? '0' : ''}${sec}`;
 
   return (
-    <Animated.View style={[styles.container, { transform: [{ translateY }] }]} pointerEvents="box-none">
+    <Animated.View
+      style={[
+        styles.container,
+        { bottom: 72 + Math.max(insets.bottom, 8), transform: [{ translateY }] },
+      ]}
+      pointerEvents="box-none"
+    >
       <View style={[styles.pill, { backgroundColor: c.surface, borderColor: c.border }]}>
         <TouchableOpacity
           style={styles.actionBtn}
@@ -83,7 +91,6 @@ export const FloatingRestTimer = memo(FloatingRestTimerComponent);
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 96,
     left: 0,
     right: 0,
     alignItems: 'center',

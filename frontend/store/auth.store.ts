@@ -101,6 +101,17 @@ export const useAuthStore = create<AuthState>((set) => ({
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     await SecureStore.deleteItemAsync(USER_KEY);
     set({ token: null, user: null, isAuthenticated: false, error: null });
+    // Clear in-memory workout/timer so the next account doesn't inherit UI state
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useWorkoutStore } = require('@/store/workout.store') as typeof import('@/store/workout.store');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useTimerStore } = require('@/store/timer.store') as typeof import('@/store/timer.store');
+      useWorkoutStore.getState().clearSession();
+      useTimerStore.getState().stopTimer();
+    } catch {
+      // ignore
+    }
   },
 
   clearError: () => set({ error: null }),

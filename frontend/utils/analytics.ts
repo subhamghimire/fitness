@@ -291,17 +291,17 @@ export function getSmartInsights(workouts: Workout[]): string[] {
   
   if (lastVol > prevVol && prevVol > 0) {
     const pct = Math.round(((lastVol - prevVol) / prevVol) * 100);
-    insights.push(`You lifted ${pct}% more volume than your previous session! 🚀`);
+    insights.push(`Volume up ${pct}% vs your previous session.`);
   }
 
   // Streak insight
   const streak = getSummaryMetrics(workouts).currentStreak;
   if (streak > 2) {
-    insights.push(`You're on a ${streak}-day streak 🔥 Keep the momentum going!`);
+    insights.push(`${streak}-day training streak.`);
   }
 
   if (insights.length === 0) {
-    insights.push("Consistency is key. Great job showing up!");
+    insights.push('Keep showing up — consistency compounds.');
   }
 
   return insights;

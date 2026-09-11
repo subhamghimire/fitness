@@ -14,10 +14,14 @@ interface WorkoutState {
   startFromTemplate: (template: Template) => Promise<string>;
   endWorkout: () => Promise<void>;
   cancelWorkout: () => Promise<void>;
+  clearSession: () => void;
   loadActiveWorkout: () => Promise<void>;
   loadPreviousSets: (exerciseId: string, name: string) => Promise<void>;
   addExercise: (name: string) => Promise<string>;
-  updateExercise: (exerciseId: string, data: Partial<Pick<Exercise, 'name' | 'notes'>>) => Promise<void>;
+  updateExercise: (
+    exerciseId: string,
+    data: Partial<Pick<Exercise, 'name' | 'notes' | 'restSeconds'>>
+  ) => Promise<void>;
   removeExercise: (exerciseId: string) => Promise<void>;
   addSet: (exerciseId: string) => Promise<string>;
   updateSet: (setId: string, data: Partial<Omit<SetData, 'id' | 'exerciseId'>>) => Promise<void>;
@@ -38,15 +42,35 @@ function emptyWorkout(id: string, now: string): Workout {
   };
 }
 
+async function resolveExistingActive(get: () => WorkoutState): Promise<Workout | null> {
+  const inMemory = get().activeWorkout;
+  if (inMemory) return inMemory;
+  return WorkoutRepository.getActive();
+}
+
 export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   activeWorkout: null,
   isLoading: false,
   previousSets: {},
 
+  clearSession: () => {
+    set({ activeWorkout: null, previousSets: {}, isLoading: false });
+  },
+
   loadActiveWorkout: async () => {
+    const priorId = get().activeWorkout?.id;
+    const priorPrevious = get().previousSets;
     set({ isLoading: true });
     try {
       const w = await WorkoutRepository.getActive();
+      if (w && w.id === priorId) {
+        // Keep previousSets to avoid PREV column flash on re-entry
+        set({ activeWorkout: w, previousSets: priorPrevious, isLoading: false });
+        w.exercises.forEach((ex) => {
+          if (!priorPrevious[ex.id]) get().loadPreviousSets(ex.id, ex.name);
+        });
+        return;
+      }
       set({ activeWorkout: w, previousSets: {} });
       if (w) {
         w.exercises.forEach((ex) => get().loadPreviousSets(ex.id, ex.name));
@@ -61,22 +85,41 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   loadPreviousSets: async (exerciseId, name) => {
     const w = get().activeWorkout;
     if (!w) return;
-    const sets = await WorkoutRepository.previousSets(name, w.id);
-    set((state) => ({ previousSets: { ...state.previousSets, [exerciseId]: sets } }));
+    try {
+      const sets = await WorkoutRepository.previousSets(name, w.id);
+      set((state) => ({ previousSets: { ...state.previousSets, [exerciseId]: sets } }));
+    } catch {
+      // Keep empty PREV rather than crashing the workout screen
+    }
   },
 
   startWorkout: async () => {
+    const existing = await resolveExistingActive(get);
+    if (existing) {
+      set({ activeWorkout: existing });
+      return existing.id;
+    }
     const id = generateId();
     const now = getCurrentISOString();
-    await WorkoutRepository.insert(WorkoutRepository.createLocalWorkoutRow({ id, status: 'active', started_at: now }));
-    set({ activeWorkout: emptyWorkout(id, now) });
+    await WorkoutRepository.insert(
+      WorkoutRepository.createLocalWorkoutRow({ id, status: 'active', started_at: now })
+    );
+    set({ activeWorkout: emptyWorkout(id, now), previousSets: {} });
     return id;
   },
 
   startFromTemplate: async (template) => {
+    const existing = await resolveExistingActive(get);
+    if (existing) {
+      set({ activeWorkout: existing });
+      return existing.id;
+    }
+
     const id = generateId();
     const now = getCurrentISOString();
-    await WorkoutRepository.insert(WorkoutRepository.createLocalWorkoutRow({ id, status: 'active', started_at: now }));
+    await WorkoutRepository.insert(
+      WorkoutRepository.createLocalWorkoutRow({ id, status: 'active', started_at: now })
+    );
 
     const exercises: Exercise[] = [];
     let orderIndex = 0;
@@ -136,7 +179,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
       orderIndex++;
     }
 
-    set({ activeWorkout: { ...emptyWorkout(id, now), exercises } });
+    set({ activeWorkout: { ...emptyWorkout(id, now), exercises }, previousSets: {} });
     exercises.forEach((ex) => get().loadPreviousSets(ex.id, ex.name));
     return id;
   },
@@ -151,7 +194,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     for (let attempt = 0; attempt < 8; attempt += 1) {
       try {
         await WorkoutRepository.update(w.id, { status: 'completed', ended_at: endedAt });
-        set({ activeWorkout: null });
+        set({ activeWorkout: null, previousSets: {} });
         return;
       } catch (error) {
         lastError = error;
@@ -165,9 +208,8 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   cancelWorkout: async () => {
     const { activeWorkout: w } = get();
     if (!w) return;
-    // Active never-synced workouts can be hard-deleted
     await WorkoutRepository.hardDelete(w.id);
-    set({ activeWorkout: null });
+    set({ activeWorkout: null, previousSets: {} });
   },
 
   addExercise: async (name) => {
@@ -204,20 +246,41 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     if (!w) return;
     const ex = w.exercises.find((e) => e.id === exerciseId);
     if (!ex) return;
-    await WorkoutRepository.updateExercise(exerciseId, data.name || ex.name, data.notes !== undefined ? data.notes : ex.notes);
+    const nextName = data.name ?? ex.name;
+    const nextNotes = data.notes !== undefined ? data.notes : ex.notes;
+    const nextRest =
+      data.restSeconds !== undefined ? data.restSeconds : ex.restSeconds ?? null;
+
+    await WorkoutRepository.updateExercise(exerciseId, nextName, nextNotes);
+    if (data.restSeconds !== undefined && data.restSeconds != null) {
+      await WorkoutRepository.updateRestSeconds(exerciseId, data.restSeconds);
+    }
+
     set({
       activeWorkout: {
         ...w,
-        exercises: w.exercises.map((e) => (e.id === exerciseId ? { ...e, ...data } : e)),
+        exercises: w.exercises.map((e) =>
+          e.id === exerciseId
+            ? { ...e, name: nextName, notes: nextNotes, restSeconds: nextRest }
+            : e
+        ),
       },
     });
+
+    if (data.name && data.name !== ex.name) {
+      get().loadPreviousSets(exerciseId, data.name);
+    }
   },
 
   removeExercise: async (exerciseId) => {
     const { activeWorkout: w } = get();
     if (!w) return;
     await WorkoutRepository.deleteExercise(exerciseId);
-    set({ activeWorkout: { ...w, exercises: w.exercises.filter((e) => e.id !== exerciseId) } });
+    const { [exerciseId]: _removed, ...restPrev } = get().previousSets;
+    set({
+      activeWorkout: { ...w, exercises: w.exercises.filter((e) => e.id !== exerciseId) },
+      previousSets: restPrev,
+    });
   },
 
   addSet: async (exerciseId) => {
@@ -242,7 +305,9 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     set({
       activeWorkout: {
         ...w,
-        exercises: w.exercises.map((e) => (e.id === exerciseId ? { ...e, sets: [...e.sets, newSet] } : e)),
+        exercises: w.exercises.map((e) =>
+          e.id === exerciseId ? { ...e, sets: [...e.sets, newSet] } : e
+        ),
       },
     });
     const sync = newSyncDefaults();
@@ -259,8 +324,19 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         is_completed: 0,
         ...sync,
       });
-    } catch {
-      // Optimistic set remains in UI
+    } catch (error) {
+      const current = get().activeWorkout;
+      if (current) {
+        set({
+          activeWorkout: {
+            ...current,
+            exercises: current.exercises.map((e) =>
+              e.id === exerciseId ? { ...e, sets: e.sets.filter((s) => s.id !== id) } : e
+            ),
+          },
+        });
+      }
+      throw error;
     }
     return id;
   },
@@ -268,14 +344,17 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   updateSet: async (setId, data) => {
     const { activeWorkout: w } = get();
     if (!w) return;
-    // Optimistic UI first — never wait on SQLite for set logging feel.
+    // Optimistic UI first — only rewrite the exercise that owns this set
     set({
       activeWorkout: {
         ...w,
-        exercises: w.exercises.map((ex) => ({
-          ...ex,
-          sets: ex.sets.map((s) => (s.id === setId ? { ...s, ...data } : s)),
-        })),
+        exercises: w.exercises.map((ex) => {
+          if (!ex.sets.some((s) => s.id === setId)) return ex;
+          return {
+            ...ex,
+            sets: ex.sets.map((s) => (s.id === setId ? { ...s, ...data } : s)),
+          };
+        }),
       },
     });
     const localData: Partial<SetLocal> = {};
@@ -299,10 +378,10 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     set({
       activeWorkout: {
         ...w,
-        exercises: w.exercises.map((ex) => ({
-          ...ex,
-          sets: ex.sets.filter((s) => s.id !== setId),
-        })),
+        exercises: w.exercises.map((ex) => {
+          if (!ex.sets.some((s) => s.id === setId)) return ex;
+          return { ...ex, sets: ex.sets.filter((s) => s.id !== setId) };
+        }),
       },
     });
     try {

@@ -11,7 +11,7 @@ const LABELS: Record<string, string> = {
   pending: 'Pending',
   offline: 'Offline',
   failed: 'Retry',
-  conflict: 'Synced',
+  conflict: 'Review',
 };
 
 export function SyncIndicator() {
@@ -20,10 +20,10 @@ export function SyncIndicator() {
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
 
-  if ((status === 'idle' || status === 'conflict') && pendingCount === 0) return null;
+  if (status === 'idle' && pendingCount === 0) return null;
 
   const color =
-    status === 'failed'
+    status === 'failed' || status === 'conflict'
       ? c.danger
       : status === 'offline' || status === 'pending'
         ? c.textTertiary

@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Modal, Easing } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Modal } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
-import * as Haptics from 'expo-haptics';
 import { C } from '@/constants/Colors';
 import { useUnitStore } from '@/store/unit.store';
 import type { TemplateSet } from '@/types';
@@ -20,7 +19,6 @@ export function TemplateSetRow({ set, setNumber, onUpdate, onDelete, isDark = fa
   const [weight, setWeight] = useState(set.weight?.toString() ?? '');
   const [reps, setReps] = useState(set.reps?.toString() ?? '');
   const [showTypeSelector, setShowTypeSelector] = useState(false);
-  const shake = useRef(new Animated.Value(0)).current;
 
   const c = isDark ? C.dark : C.light;
   const unit = useUnitStore((state) => state.unit);
@@ -30,18 +28,15 @@ export function TemplateSetRow({ set, setNumber, onUpdate, onDelete, isDark = fa
     setReps(set.reps?.toString() ?? '');
   }, [set.weight, set.reps]);
 
-  const handleWeight = (v: string) => { setWeight(v); const n = v ? parseFloat(v) : null; if (v === '' || !isNaN(n!)) onUpdate({ weight: n }); };
-  const handleReps = (v: string) => { setReps(v); const n = v ? parseInt(v) : null; if (v === '' || !isNaN(n!)) onUpdate({ reps: n }); };
-  const handleDisabledPreviousTap = () => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    shake.setValue(0);
-    Animated.sequence([
-      Animated.timing(shake, { toValue: -1, duration: 45, easing: Easing.linear, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: 1, duration: 45, easing: Easing.linear, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: -0.8, duration: 40, easing: Easing.linear, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: 0.8, duration: 40, easing: Easing.linear, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: 0, duration: 35, easing: Easing.linear, useNativeDriver: true }),
-    ]).start();
+  const handleWeight = (v: string) => {
+    setWeight(v);
+    const n = v ? parseFloat(v) : null;
+    if (v === '' || !isNaN(n!)) onUpdate({ weight: n });
+  };
+  const handleReps = (v: string) => {
+    setReps(v);
+    const n = v ? parseInt(v) : null;
+    if (v === '' || !isNaN(n!)) onUpdate({ reps: n });
   };
 
   const isW = set.isWarmup;
@@ -75,23 +70,9 @@ export function TemplateSetRow({ set, setNumber, onUpdate, onDelete, isDark = fa
           <Text style={[styles.badgeText, { color: badgeTextColor }]}>{badgeText}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity activeOpacity={1} onPress={handleDisabledPreviousTap}>
-          <Animated.View
-            style={[
-              styles.prevWrap,
-              {
-                transform: [{
-                  translateX: shake.interpolate({
-                    inputRange: [-1, 1],
-                    outputRange: [-6, 6],
-                  }),
-                }],
-              },
-            ]}
-          >
-            <Text style={[styles.prevText, { color: c.textGhost }]}>-</Text>
-          </Animated.View>
-        </TouchableOpacity>
+        <View style={styles.prevWrap}>
+          <Text style={[styles.prevText, { color: c.textTertiary }]}>–</Text>
+        </View>
 
         <View style={styles.inputWrap}>
           <TextInput

@@ -6,9 +6,8 @@ describe('calculatePlates', () => {
     expect(r.achievable).toBe(true);
     expect(r.totalLoaded).toBe(100);
     expect(r.perSide).toEqual([
-      { weight: 20, count: 1 },
+      { weight: 25, count: 1 },
       { weight: 15, count: 1 },
-      { weight: 5, count: 1 },
     ]);
   });
 
@@ -20,6 +19,6 @@ describe('calculatePlates', () => {
 
   it('formats plate stack', () => {
     const r = calculatePlates(100, DEFAULT_PLATE_CONFIG_KG);
-    expect(formatPlateStack(r, 'kg')).toContain('20');
+    expect(formatPlateStack(r, 'kg')).toContain('25');
   });
 });

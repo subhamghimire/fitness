@@ -46,6 +46,14 @@ function SetRowComponent({
   const completionAnim = useRef(new Animated.Value(completed ? 1 : 0)).current;
   const weightCommitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const repsCommitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingWeightRef = useRef<string | null>(null);
+  const pendingRepsRef = useRef<string | null>(null);
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+  const setWeightRef = useRef(set.weight);
+  setWeightRef.current = set.weight;
+  const setRepsRef = useRef(set.reps);
+  setRepsRef.current = set.reps;
 
   useEffect(() => {
     setWeight(set.weight?.toString() ?? '');
@@ -67,43 +75,59 @@ function SetRowComponent({
     }).start();
   }, [completionAnim, completed]);
 
-  useEffect(() => {
-    return () => {
-      if (weightCommitRef.current) clearTimeout(weightCommitRef.current);
-      if (repsCommitRef.current) clearTimeout(repsCommitRef.current);
-    };
+  const commitWeightValue = useCallback((v: string) => {
+    const n = v === '' ? null : parseFloat(v);
+    if (v === '' || !Number.isNaN(n!)) {
+      if (n !== setWeightRef.current) onUpdateRef.current({ weight: n });
+    }
   }, []);
 
-  const commitWeight = useCallback(
-    (v: string) => {
-      const n = v === '' ? null : parseFloat(v);
-      if (v === '' || !Number.isNaN(n!)) {
-        if (n !== set.weight) onUpdate({ weight: n });
-      }
-    },
-    [onUpdate, set.weight]
-  );
+  const commitRepsValue = useCallback((v: string) => {
+    const n = v === '' ? null : parseInt(v, 10);
+    if (v === '' || !Number.isNaN(n!)) {
+      if (n !== setRepsRef.current) onUpdateRef.current({ reps: n });
+    }
+  }, []);
 
-  const commitReps = useCallback(
-    (v: string) => {
-      const n = v === '' ? null : parseInt(v, 10);
-      if (v === '' || !Number.isNaN(n!)) {
-        if (n !== set.reps) onUpdate({ reps: n });
+  useEffect(() => {
+    return () => {
+      if (weightCommitRef.current) {
+        clearTimeout(weightCommitRef.current);
+        weightCommitRef.current = null;
       }
-    },
-    [onUpdate, set.reps]
-  );
+      if (repsCommitRef.current) {
+        clearTimeout(repsCommitRef.current);
+        repsCommitRef.current = null;
+      }
+      if (pendingWeightRef.current !== null) {
+        commitWeightValue(pendingWeightRef.current);
+        pendingWeightRef.current = null;
+      }
+      if (pendingRepsRef.current !== null) {
+        commitRepsValue(pendingRepsRef.current);
+        pendingRepsRef.current = null;
+      }
+    };
+  }, [commitWeightValue, commitRepsValue]);
 
   const handleWeight = (v: string) => {
     setWeight(v);
+    pendingWeightRef.current = v;
     if (weightCommitRef.current) clearTimeout(weightCommitRef.current);
-    weightCommitRef.current = setTimeout(() => commitWeight(v), 280);
+    weightCommitRef.current = setTimeout(() => {
+      pendingWeightRef.current = null;
+      commitWeightValue(v);
+    }, 280);
   };
 
   const handleReps = (v: string) => {
     setReps(v);
+    pendingRepsRef.current = v;
     if (repsCommitRef.current) clearTimeout(repsCommitRef.current);
-    repsCommitRef.current = setTimeout(() => commitReps(v), 280);
+    repsCommitRef.current = setTimeout(() => {
+      pendingRepsRef.current = null;
+      commitRepsValue(v);
+    }, 280);
   };
 
   const flushWeight = () => {
@@ -111,7 +135,8 @@ function SetRowComponent({
       clearTimeout(weightCommitRef.current);
       weightCommitRef.current = null;
     }
-    commitWeight(weight);
+    pendingWeightRef.current = null;
+    commitWeightValue(weight);
   };
 
   const flushReps = () => {
@@ -119,7 +144,8 @@ function SetRowComponent({
       clearTimeout(repsCommitRef.current);
       repsCommitRef.current = null;
     }
-    commitReps(reps);
+    pendingRepsRef.current = null;
+    commitRepsValue(reps);
   };
 
   const toggleComplete = () => {
@@ -378,7 +404,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 36,
+    paddingBottom: 40,
   },
   modalTitle: {
     fontSize: 13,

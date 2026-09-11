@@ -30,8 +30,11 @@ export default function HomeScreen() {
   const isDark = colorScheme === 'dark';
   const c = isDark ? C.dark : C.light;
 
-  const { activeWorkout, startWorkout, loadActiveWorkout } = useWorkoutStore();
-  const { user } = useAuthStore();
+  const activeWorkout = useWorkoutStore((s) => s.activeWorkout);
+  const startWorkout = useWorkoutStore((s) => s.startWorkout);
+  const loadActiveWorkout = useWorkoutStore((s) => s.loadActiveWorkout);
+  const user = useAuthStore((s) => s.user);
+  const [loadingRecent, setLoadingRecent] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
@@ -42,11 +45,13 @@ export default function HomeScreen() {
 
   const loadRecentWorkouts = async () => {
     try {
-      const workouts = await WorkoutRepository.getHistory(80, 0);
+      const workouts = await WorkoutRepository.getHistory(40, 0);
       setRecentWorkouts(workouts.slice(0, 5));
       setWeekSummary(getWeeklySummary(workouts));
-    } catch (error) {
-      console.error('Failed to load recent workouts:', error);
+    } catch {
+      // Keep prior data if refresh fails
+    } finally {
+      setLoadingRecent(false);
     }
   };
 
@@ -72,7 +77,7 @@ export default function HomeScreen() {
     return new Date(w.startedAt) > ago;
   });
 
-  const displayName = user?.email?.split('@')[0] || 'Athlete';
+  const displayName = user?.email?.split('@')[0] || 'there';
 
   return (
     <ScrollView
@@ -81,7 +86,7 @@ export default function HomeScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.greeting}>
-        <Text style={[styles.greetSub, { color: c.textSecondary }]}>Ready to train,</Text>
+        <Text style={[styles.greetSub, { color: c.textSecondary }]}>Today</Text>
         <Text style={[styles.greetName, { color: c.text }]} numberOfLines={1}>
           {displayName}
         </Text>
@@ -96,7 +101,7 @@ export default function HomeScreen() {
           <View style={styles.activeBannerLeft}>
             <View style={[styles.pulsingDot, { backgroundColor: 'rgba(255,255,255,0.75)' }]} />
             <View>
-              <Text style={styles.activeBannerTitle}>Workout in Progress</Text>
+              <Text style={styles.activeBannerTitle}>Workout in progress</Text>
               <WorkoutTimer
                 startTime={activeWorkout.startedAt}
                 textColor="rgba(255,255,255,0.75)"
@@ -152,7 +157,11 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: c.text }]}>Recent</Text>
 
-        {recentWorkouts.length === 0 ? (
+        {loadingRecent && recentWorkouts.length === 0 ? (
+          <View style={styles.emptyBlock}>
+            <Text style={[styles.emptyBody, { color: c.textSecondary }]}>Loading…</Text>
+          </View>
+        ) : recentWorkouts.length === 0 ? (
           <View style={styles.emptyBlock}>
             <Text style={[styles.emptyTitle, { color: c.text }]}>No workouts yet</Text>
             <Text style={[styles.emptyBody, { color: c.textSecondary }]}>

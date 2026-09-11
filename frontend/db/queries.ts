@@ -149,10 +149,17 @@ export async function hardDeleteWorkout(id: string): Promise<void> {
 }
 
 export async function getActiveWorkout(): Promise<Workout | null> {
-  const row = await getDatabase().getFirstAsync<WorkoutLocal>(
-    `SELECT * FROM workouts_local WHERE status = 'active' AND deleted_at IS NULL LIMIT 1`
+  const rows = await getDatabase().getAllAsync<WorkoutLocal>(
+    `SELECT * FROM workouts_local
+     WHERE status = 'active' AND deleted_at IS NULL
+     ORDER BY started_at DESC`
   );
-  return row ? buildFullWorkout(row) : null;
+  if (rows.length === 0) return null;
+  // Keep the newest active workout; remove accidental orphans
+  for (const orphan of rows.slice(1)) {
+    await hardDeleteWorkout(orphan.id);
+  }
+  return buildFullWorkout(rows[0]);
 }
 
 export async function getCompletedUnsyncedWorkouts(): Promise<Workout[]> {

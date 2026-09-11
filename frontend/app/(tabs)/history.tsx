@@ -45,9 +45,8 @@ export default function HistoryScreen() {
     try {
       const w = await WorkoutRepository.getHistory(500, 0);
       setWorkouts(w);
-    } catch (e) {
-      Alert.alert('History Error', String(e));
-      console.error(e);
+    } catch {
+      Alert.alert('Couldn’t load history', 'Pull down to try again.');
     }
   };
 
@@ -80,7 +79,7 @@ export default function HistoryScreen() {
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
-      <Text style={[styles.pageTitle, { color: c.text }]}>Progress Hub</Text>
+      <Text style={[styles.pageTitle, { color: c.text }]}>History</Text>
       
       {/* Summary Cards */}
       <View style={styles.summaryGrid}>
@@ -171,7 +170,7 @@ export default function HistoryScreen() {
       </Text>
       <TouchableOpacity
         style={[styles.emptyBtn, { backgroundColor: c.accent }]}
-        onPress={() => router.push('/')}
+        onPress={() => router.push('/(tabs)')}
         activeOpacity={0.8}
       >
         <Text style={styles.emptyBtnText}>Start a workout</Text>

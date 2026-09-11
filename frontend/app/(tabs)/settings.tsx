@@ -9,6 +9,8 @@ import { useAuthStore } from '@/store/auth.store';
 import { useThemeStore, type ThemePreference } from '@/store/theme.store';
 import { useUnitStore, type WeightUnit } from '@/store/unit.store';
 import { usePreferencesStore } from '@/store/preferences.store';
+import { useWorkoutStore } from '@/store/workout.store';
+import { useTimerStore } from '@/store/timer.store';
 import type { ProgressionStyle } from '@/utils/progression';
 import { syncService } from '@/sync/sync.service';
 import { WorkoutRepository } from '@/repositories/workout.repository';
@@ -121,6 +123,8 @@ export default function SettingsScreen() {
       onPress: async () => {
         try {
           await resetDatabase();
+          useWorkoutStore.getState().clearSession();
+          useTimerStore.getState().stopTimer();
           Alert.alert('Done', 'All data cleared');
           await loadCount();
         } catch {

@@ -18,6 +18,7 @@ import { useWorkoutStore } from '@/store/workout.store';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
 import { WorkoutRepository } from '@/repositories/workout.repository';
+import { suggestedRestSeconds } from '@/utils/progression';
 
 const CATEGORIES: { label: string; icon: string; exercises: string[] }[] = [
   { label: 'Chest', icon: 'heart', exercises: ['Bench Press', 'Incline Bench Press', 'Decline Bench Press', 'Dumbbell Press', 'Dumbbell Fly', 'Cable Fly', 'Push Up', 'Chest Dip'] },
@@ -58,15 +59,18 @@ export default function ExercisePickerScreen() {
   const handleSelect = useCallback(
     async (name: string) => {
       void Haptics.selectionAsync();
-      router.back();
       try {
         if (replaceExerciseId) {
-          await updateExercise(replaceExerciseId, { name });
+          await updateExercise(replaceExerciseId, {
+            name,
+            restSeconds: suggestedRestSeconds(name),
+          });
           await loadPreviousSets(replaceExerciseId, name);
         } else {
           const id = await addExercise(name);
           await addSet(id);
         }
+        router.back();
       } catch {
         Alert.alert('Could not add exercise', 'Please try again.');
       }

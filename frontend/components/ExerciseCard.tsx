@@ -110,10 +110,11 @@ function ExerciseCardComponent({
       </View>
 
       <View style={styles.sets}>
-        {exercise.sets.map((s, index) => {
+        {exercise.sets.map((s) => {
           const isWorking = !s.isWarmup && !s.isDropset && !s.isFailure;
           if (isWorking) workingSetCount++;
-          const prevSet = previousSets?.[index];
+          const prevWorking = (previousSets ?? []).filter((p) => !p.isWarmup);
+          const prevSet = isWorking ? prevWorking[workingSetCount - 1] : undefined;
           return (
             <SetRow
               key={s.id}

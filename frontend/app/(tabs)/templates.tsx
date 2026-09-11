@@ -35,14 +35,15 @@ export default function TemplatesScreen() {
     }, [])
   );
 
-  const { startFromTemplate: storeStartTemplate, activeWorkout } = useWorkoutStore();
+  const startFromTemplateStore = useWorkoutStore((s) => s.startFromTemplate);
+  const activeWorkout = useWorkoutStore((s) => s.activeWorkout);
 
   const startFromTemplate = async (t: Template) => {
     if (activeWorkout) {
-      alert('You already have an active workout in progress!');
+      Alert.alert('Workout in progress', 'Finish or discard your current workout first.');
       return;
     }
-    const id = await storeStartTemplate(t);
+    const id = await startFromTemplateStore(t);
     router.push(`/workout/${id}`);
   };
 

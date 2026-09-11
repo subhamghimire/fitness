@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
 import type { PersonalRecord } from '@/utils/prs';
@@ -20,6 +21,7 @@ export function PRToastProvider({ children }: { children: React.ReactNode }) {
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
+  const insets = useSafeAreaInsets();
 
   const showPRs = useCallback(
     (prs: PersonalRecord[]) => {
@@ -48,7 +50,15 @@ export function PRToastProvider({ children }: { children: React.ReactNode }) {
       {message ? (
         <Animated.View
           pointerEvents="none"
-          style={[styles.toast, { backgroundColor: c.surface, borderColor: c.border, opacity }]}
+          style={[
+            styles.toast,
+            {
+              top: insets.top + 8,
+              backgroundColor: c.surface,
+              borderColor: c.border,
+              opacity,
+            },
+          ]}
         >
           <View style={[styles.dot, { backgroundColor: c.success }]} />
           <Text style={[styles.text, { color: c.text }]} numberOfLines={1}>
@@ -63,7 +73,6 @@ export function PRToastProvider({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   toast: {
     position: 'absolute',
-    top: 56,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',

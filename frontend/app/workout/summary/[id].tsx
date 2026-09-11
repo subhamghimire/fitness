@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -19,18 +19,37 @@ export default function WorkoutSummaryScreen() {
   const insets = useSafeAreaInsets();
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [history, setHistory] = useState<Workout[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    let alive = true;
     (async () => {
-      if (typeof id !== 'string') return;
-      const [w, all] = await Promise.all([
-        WorkoutRepository.getById(id),
-        WorkoutRepository.getHistory(200, 0),
-      ]);
-      setWorkout(w);
-      setHistory(all);
+      try {
+        if (typeof id !== 'string') {
+          if (alive) setFailed(true);
+          return;
+        }
+        const [w, all] = await Promise.all([
+          WorkoutRepository.getById(id),
+          WorkoutRepository.getHistory(200, 0),
+        ]);
+        if (!alive) return;
+        if (!w) setFailed(true);
+        else {
+          setWorkout(w);
+          setHistory(all);
+        }
+      } catch {
+        if (alive) setFailed(true);
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
+    return () => {
+      alive = false;
+    };
   }, [id]);
 
   const summary: WorkoutSummary | null = useMemo(() => {
@@ -50,14 +69,30 @@ export default function WorkoutSummaryScreen() {
           headerBackVisible: false,
         }}
       />
-      <ScrollView
-        style={[styles.container, { backgroundColor: c.background }]}
-        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 40) }]}
-      >
-        <Text style={[styles.hero, { color: c.text }]}>Nice work</Text>
-        <Text style={[styles.sub, { color: c.textSecondary }]}>Saved on this device</Text>
+      {loading ? (
+        <View style={[styles.center, { backgroundColor: c.background }]}>
+          <ActivityIndicator color={c.accent} />
+        </View>
+      ) : failed || !summary ? (
+        <View style={[styles.center, { backgroundColor: c.background }]}>
+          <Text style={[styles.hero, { color: c.text }]}>Workout saved</Text>
+          <Text style={[styles.sub, { color: c.textSecondary }]}>Couldn’t load the summary.</Text>
+          <TouchableOpacity
+            style={[styles.primary, { backgroundColor: c.accent }]}
+            onPress={() => router.replace('/(tabs)')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.primaryText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <ScrollView
+          style={[styles.container, { backgroundColor: c.background }]}
+          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 40) }]}
+        >
+          <Text style={[styles.hero, { color: c.text }]}>Workout saved</Text>
+          <Text style={[styles.sub, { color: c.textSecondary }]}>Stored on this device</Text>
 
-        {summary && (
           <View style={[styles.stats, { backgroundColor: c.surface }]}>
             <Stat label="Exercises" value={String(summary.exerciseCount)} c={c} />
             <Stat label="Working sets" value={String(summary.workingSets)} c={c} />
@@ -72,42 +107,42 @@ export default function WorkoutSummaryScreen() {
               c={c}
             />
           </View>
-        )}
 
-        {summary && summary.prs.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: c.text }]}>Personal records</Text>
-            {summary.prs.slice(0, 6).map((pr, i) => (
-              <Text key={`${pr.kind}-${i}`} style={[styles.prLine, { color: c.textSecondary }]}>
-                {pr.exerciseName} — {pr.label}: {pr.valueLabel}
-              </Text>
-            ))}
-          </View>
-        )}
+          {summary.prs.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: c.text }]}>Personal records</Text>
+              {summary.prs.slice(0, 6).map((pr, i) => (
+                <Text key={`${pr.kind}-${i}`} style={[styles.prLine, { color: c.textSecondary }]}>
+                  {pr.exerciseName} — {pr.label}: {pr.valueLabel}
+                </Text>
+              ))}
+            </View>
+          )}
 
-        {summary?.highlights.map((h, i) => (
-          <Text key={i} style={[styles.highlight, { color: c.accent }]}>
-            {h}
-          </Text>
-        ))}
+          {summary.highlights.map((h, i) => (
+            <Text key={i} style={[styles.highlight, { color: c.accent }]}>
+              {h}
+            </Text>
+          ))}
 
-        <TouchableOpacity
-          style={[styles.primary, { backgroundColor: c.accent }]}
-          onPress={() => router.replace('/(tabs)')}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.primaryText}>Done</Text>
-        </TouchableOpacity>
-
-        {workout && (
           <TouchableOpacity
-            onPress={() => router.replace(`/workout/detail/${workout.id}`)}
-            style={styles.secondary}
+            style={[styles.primary, { backgroundColor: c.accent }]}
+            onPress={() => router.replace('/(tabs)')}
+            activeOpacity={0.85}
           >
-            <Text style={[styles.secondaryText, { color: c.textSecondary }]}>View details</Text>
+            <Text style={styles.primaryText}>Done</Text>
           </TouchableOpacity>
-        )}
-      </ScrollView>
+
+          {workout && (
+            <TouchableOpacity
+              onPress={() => router.replace(`/workout/detail/${workout.id}`)}
+              style={styles.secondary}
+            >
+              <Text style={[styles.secondaryText, { color: c.textSecondary }]}>View details</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      )}
     </>
   );
 }
@@ -131,6 +166,7 @@ function Stat({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 8 },
   content: { padding: 20, paddingBottom: 40, gap: 12 },
   hero: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5, marginTop: 8 },
   sub: { fontSize: 14, fontWeight: '500', marginBottom: 8 },
@@ -153,6 +189,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'stretch',
   },
   primaryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   secondary: { alignItems: 'center', paddingVertical: 12 },

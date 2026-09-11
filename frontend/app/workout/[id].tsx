@@ -28,6 +28,7 @@ import { suggestProgression, suggestedRestSeconds } from '@/utils/progression';
 import { detectNewPRs } from '@/utils/prs';
 import { WorkoutRepository } from '@/repositories/workout.repository';
 import { usePreferencesStore } from '@/store/preferences.store';
+import { useTimerStore } from '@/store/timer.store';
 import type { SetData, Workout } from '@/types';
 
 function ActiveWorkoutInner() {
@@ -102,6 +103,7 @@ function ActiveWorkoutInner() {
           try {
             void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             await workoutNotificationService.stop();
+            useTimerStore.getState().stopTimer();
             await endWorkout();
             router.replace(`/workout/summary/${finishedId}`);
             try {
@@ -127,6 +129,7 @@ function ActiveWorkoutInner() {
         onPress: async () => {
           try {
             await workoutNotificationService.stop();
+            useTimerStore.getState().stopTimer();
             await cancelWorkout();
             router.replace('/(tabs)');
           } catch {
@@ -251,6 +254,7 @@ function ActiveWorkoutInner() {
       <KeyboardAvoidingView 
         style={[styles.container, { backgroundColor: c.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
         <ScrollView
           style={styles.scroll}
