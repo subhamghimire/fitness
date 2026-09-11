@@ -77,12 +77,26 @@ const ALTER_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: 'template_sets_local', column: 'last_synced_revision', ddl: 'INTEGER' },
 ];
 
+async function tableHasColumn(
+  database: SQLite.SQLiteDatabase,
+  table: string,
+  column: string
+): Promise<boolean> {
+  const rows = await database.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
+  return rows.some((r) => r.name === column);
+}
+
 async function ensureColumns(database: SQLite.SQLiteDatabase): Promise<void> {
   for (const { table, column, ddl } of ALTER_COLUMNS) {
     try {
-      await database.execAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl};`);
-    } catch {
-      // Column already exists
+      const exists = await tableHasColumn(database, table, column);
+      if (exists) continue;
+      await database.runAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // Ignore races / already-exists from older SQLite builds
+      if (/duplicate column/i.test(message)) continue;
+      throw error;
     }
   }
 }
@@ -167,7 +181,16 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (db && isInitialized) return db;
   db = await SQLite.openDatabaseAsync(DATABASE_NAME);
   await db.execAsync('PRAGMA foreign_keys = ON;');
-  for (const sql of ALL_TABLES_SQL) await db.execAsync(sql);
+  for (const sql of ALL_TABLES_SQL) {
+    try {
+      await db.execAsync(sql);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // Older DBs may already have tables; duplicate-column CREATE should never block boot
+      if (/duplicate column/i.test(message) || /already exists/i.test(message)) continue;
+      throw error;
+    }
+  }
   await db.execAsync(CREATE_SYNC_META_TABLE);
   await ensureColumns(db);
   await backfillSyncMetadata(db);

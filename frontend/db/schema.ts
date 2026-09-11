@@ -49,7 +49,6 @@ export const CREATE_SETS_TABLE = `CREATE TABLE IF NOT EXISTS sets_local (
 export const CREATE_TEMPLATES_TABLE = `CREATE TABLE IF NOT EXISTS templates_local (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
-  created_at TEXT NOT NULL,
   ${SYNC_COLS}
 );`;
 
