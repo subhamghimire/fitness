@@ -1,17 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth.store';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
-
-WebBrowser.maybeCompleteAuthSession();
+import { GoogleSignInButton, isGoogleAuthConfigured } from '@/components/GoogleSignInButton';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -20,133 +25,121 @@ export default function LoginScreen() {
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
-  const isGoogleConfigured = Boolean(
-    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID &&
-    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID &&
-    process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
-  );
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-  });
+  const googleEnabled = isGoogleAuthConfigured();
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) { Alert.alert('Error', 'Please enter email and password'); return; }
-    try { await login(email.trim(), password); router.replace('/(tabs)'); }
-    catch (err: any) { Alert.alert('Login Failed', err.message || 'Please check your credentials'); }
-  };
-
-  useEffect(() => {
-    if (response?.type !== 'success') return;
-    const idToken = response.params?.id_token;
-    if (!idToken) {
-      Alert.alert('Google Login Failed', 'Could not get Google ID token.');
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Error', 'Please enter email and password');
       return;
     }
+    try {
+      await login(email.trim(), password);
+      router.replace('/(tabs)');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Please check your credentials';
+      Alert.alert('Login Failed', message);
+    }
+  };
 
-    (async () => {
-      try {
-        await loginWithGoogle(idToken);
-        router.replace('/(tabs)');
-      } catch (err: any) {
-        Alert.alert('Google Login Failed', err.message || 'Please try again.');
-      }
-    })();
-  }, [response]);
+  const handleGoogleSuccess = useCallback(
+    async (idToken: string) => {
+      await loginWithGoogle(idToken);
+      router.replace('/(tabs)');
+    },
+    [loginWithGoogle, router]
+  );
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={[styles.container, { backgroundColor: c.background }]}
     >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-      <View style={styles.inner}>
-        {/* Brand */}
-        <View style={styles.brand}>
-          <View style={[styles.logoBox, { backgroundColor: c.accent }]}>
-            <FontAwesome name="bolt" size={32} color="#fff" />
-          </View>
-          <Text style={[styles.logoTitle, { color: c.text }]}>Fitness</Text>
-          <Text style={[styles.logoSub, { color: c.textSecondary }]}>Your personal workout journal</Text>
-        </View>
-
-        {/* Card */}
-        <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <Text style={[styles.cardTitle, { color: c.text }]}>Welcome back</Text>
-
-          <View style={styles.fields}>
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: c.textSecondary }]}>Email</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: c.surfaceElevated, color: c.text, borderColor: c.border }]}
-                placeholder="you@example.com"
-                placeholderTextColor={c.textTertiary}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                editable={!isLoading}
-              />
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.inner}>
+          <View style={styles.brand}>
+            <View style={[styles.logoBox, { backgroundColor: c.accent }]}>
+              <FontAwesome name="bolt" size={32} color="#fff" />
             </View>
-
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: c.textSecondary }]}>Password</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: c.surfaceElevated, color: c.text, borderColor: c.border }]}
-                placeholder="••••••••"
-                placeholderTextColor={c.textTertiary}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                textContentType="password"
-                editable={!isLoading}
-              />
-            </View>
+            <Text style={[styles.logoTitle, { color: c.text }]}>Fitness</Text>
+            <Text style={[styles.logoSub, { color: c.textSecondary }]}>Your personal workout journal</Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.cta, { backgroundColor: c.accent, opacity: isLoading ? 0.7 : 1 }]}
-            onPress={handleLogin}
-            disabled={isLoading}
-            activeOpacity={0.85}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.ctaText}>Sign In</Text>
-            )}
-          </TouchableOpacity>
+          <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+            <Text style={[styles.cardTitle, { color: c.text }]}>Welcome back</Text>
 
-          <TouchableOpacity
-            style={[styles.googleBtn, { backgroundColor: c.surfaceElevated, borderColor: c.border, opacity: isLoading ? 0.65 : 1 }]}
-            onPress={() => {
-              if (!isGoogleConfigured) {
-                Alert.alert('Google Sign-In Not Configured', 'Please set Google client IDs in frontend .env first.');
-                return;
-              }
-              promptAsync();
-            }}
-            disabled={isLoading || !request || !isGoogleConfigured}
-            activeOpacity={0.85}
-          >
-            <FontAwesome name="google" size={16} color={c.text} />
-            <Text style={[styles.googleBtnText, { color: c.text }]}>Continue With Google</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.fields}>
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: c.textSecondary }]}>Email</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    { backgroundColor: c.surfaceElevated, color: c.text, borderColor: c.border },
+                  ]}
+                  placeholder="you@example.com"
+                  placeholderTextColor={c.textTertiary}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  editable={!isLoading}
+                />
+              </View>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={[styles.footerText, { color: c.textSecondary }]}>Don't have an account? </Text>
-          <Link href="/(auth)/register" asChild>
-            <TouchableOpacity disabled={isLoading}>
-              <Text style={[styles.footerLink, { color: c.accent }]}>Sign Up</Text>
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: c.textSecondary }]}>Password</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    { backgroundColor: c.surfaceElevated, color: c.text, borderColor: c.border },
+                  ]}
+                  placeholder="••••••••"
+                  placeholderTextColor={c.textTertiary}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  textContentType="password"
+                  editable={!isLoading}
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.cta, { backgroundColor: c.accent, opacity: isLoading ? 0.7 : 1 }]}
+              onPress={handleLogin}
+              disabled={isLoading}
+              activeOpacity={0.85}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.ctaText}>Sign In</Text>
+              )}
             </TouchableOpacity>
-          </Link>
+
+            {googleEnabled ? (
+              <GoogleSignInButton
+                onSuccess={handleGoogleSuccess}
+                disabled={isLoading}
+                isDark={isDark}
+              />
+            ) : null}
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={[styles.footerText, { color: c.textSecondary }]}>Don't have an account? </Text>
+            <Link href="/(auth)/register" asChild>
+              <TouchableOpacity disabled={isLoading}>
+                <Text style={[styles.footerLink, { color: c.accent }]}>Sign Up</Text>
+              </TouchableOpacity>
+            </Link>
+          </View>
         </View>
-      </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -157,38 +150,39 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1 },
   inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48, gap: 28 },
   brand: { alignItems: 'center', gap: 10 },
-  logoBox: { width: 72, height: 72, borderRadius: 22, justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#6C63FF', shadowOpacity: 0.4, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 8,
+  logoBox: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  logoEmoji: { fontSize: 36 },
   logoTitle: { fontSize: 34, fontWeight: '800', letterSpacing: -1 },
   logoSub: { fontSize: 15, fontWeight: '500' },
   card: {
-    borderRadius: 20, borderWidth: 1, padding: 24, gap: 20,
-    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 16, elevation: 3,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 24,
+    gap: 20,
   },
   cardTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
   fields: { gap: 14 },
   field: { gap: 6 },
   label: { fontSize: 13, fontWeight: '600', letterSpacing: 0.2 },
   input: {
-    height: 50, borderRadius: 13, paddingHorizontal: 16, fontSize: 16, borderWidth: 1,
-  },
-  cta: {
-    height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#6C63FF', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 5,
-  },
-  ctaText: { color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
-  googleBtn: {
     height: 50,
     borderRadius: 13,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    borderWidth: 1,
+  },
+  cta: {
+    height: 52,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 8,
   },
-  googleBtnText: { fontSize: 15, fontWeight: '700' },
+  ctaText: { color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   footerText: { fontSize: 14, fontWeight: '500' },
   footerLink: { fontSize: 14, fontWeight: '700' },

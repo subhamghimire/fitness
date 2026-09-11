@@ -1,5 +1,5 @@
 import { plainToInstance, Type } from "class-transformer";
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, validateSync } from "class-validator";
+import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, ValidateIf, validateSync } from "class-validator";
 
 enum Environment {
   DEVELOPMENT = "development",
@@ -25,26 +25,66 @@ class EnvironmentVariables {
   @IsNotEmpty()
   APP_NAME: string;
 
+  // ── Database ──────────────────────────────────────────────────────────────
+  // If DATABASE_URL is provided, individual fields are optional (Supabase use-case).
+  // If DATABASE_URL is absent, individual fields are required (local Postgres use-case).
+
+  @IsOptional()
+  @IsString()
+  DATABASE_URL?: string;
+
+  @ValidateIf((o) => !o.DATABASE_URL)
   @IsString()
   @IsNotEmpty()
-  DATABASE_HOST_ADDRESS: string;
+  DATABASE_HOST_ADDRESS?: string;
 
+  @ValidateIf((o) => !o.DATABASE_URL)
   @Type(() => Number)
   @IsInt()
-  DATABASE_PORT: string;
+  DATABASE_PORT?: string;
 
+  @ValidateIf((o) => !o.DATABASE_URL)
   @IsString()
   @IsNotEmpty()
-  POSTGRES_DB: string;
+  POSTGRES_DB?: string;
 
+  @ValidateIf((o) => !o.DATABASE_URL)
   @IsString()
   @IsNotEmpty()
-  POSTGRES_USER: string;
+  POSTGRES_USER?: string;
 
+  @ValidateIf((o) => !o.DATABASE_URL)
   @IsString()
   @IsNotEmpty()
-  POSTGRES_PASSWORD: string;
+  POSTGRES_PASSWORD?: string;
 
+  // ── Supabase ──────────────────────────────────────────────────────────────
+  @IsOptional()
+  @IsString()
+  SUPABASE_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  SUPABASE_ANON_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+
+  // ── JWT ───────────────────────────────────────────────────────────────────
+  @IsString()
+  @IsNotEmpty()
+  JWT_SECRET: string;
+
+  @IsOptional()
+  @IsString()
+  JWT_ACCESS_EXPIRY?: string;
+
+  @IsOptional()
+  @IsString()
+  JWT_REFRESH_EXPIRY?: string;
+
+  // ── Google OAuth ──────────────────────────────────────────────────────────
   @IsOptional()
   @IsString()
   GOOGLE_CLIENT_IDS?: string;
