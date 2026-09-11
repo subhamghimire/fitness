@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: fitness-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: node dist/main
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8080
+      - key: APP_NAME
+        value: fitness-backend
+      # Set these manually in Render Dashboard → Environment (they contain secrets)
+      - key: APP_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_ACCESS_EXPIRY
+        value: 900
+      - key: JWT_REFRESH_EXPIRY
+        value: 604800
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Optional: Google OAuth
+      # - key: GOOGLE_CLIENT_IDS
+      #   sync: false

@@ -14,6 +14,8 @@ import { ExerciseModule } from "./modules/exercise/exercise.module";
 import { UserWorkoutModule } from "./modules/user-workout/user-workout.module";
 import { FilesModule } from "./modules/files/files.module";
 import { UserModule } from "./modules/users/user.module";
+import { HealthController } from "./common/health.controller";
+
 
 @Module({
   imports: [
@@ -37,6 +39,7 @@ import { UserModule } from "./modules/users/user.module";
     FilesModule,
     UserModule
   ],
+  controllers: [HealthController],
   providers: [
     {
       provide: APP_GUARD,
