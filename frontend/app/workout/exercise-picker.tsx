@@ -7,7 +7,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -44,6 +47,7 @@ export default function ExercisePickerScreen() {
   const updateExercise = useWorkoutStore((s) => s.updateExercise);
   const loadPreviousSets = useWorkoutStore((s) => s.loadPreviousSets);
   const isReplaceMode = !!replaceExerciseId;
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     WorkoutRepository.recentExerciseNames(12)
@@ -112,7 +116,10 @@ export default function ExercisePickerScreen() {
         }}
       />
 
-      <View style={[styles.container, { backgroundColor: c.background }]}>
+      <KeyboardAvoidingView 
+        style={[styles.container, { backgroundColor: c.background }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <View style={styles.searchWrap}>
           <View style={[styles.searchBar, { backgroundColor: c.surfaceElevated }]}>
             <FontAwesome name="search" size={14} color={c.textSecondary} />
@@ -188,7 +195,7 @@ export default function ExercisePickerScreen() {
           data={exercises}
           keyExtractor={(i) => i}
           style={styles.listWrap}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: Math.max(insets.bottom, 24) }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           ItemSeparatorComponent={() => <View style={[styles.sep, { backgroundColor: c.border }]} />}
@@ -204,7 +211,7 @@ export default function ExercisePickerScreen() {
             </View>
           }
         />
-      </View>
+      </KeyboardAvoidingView>
     </>
   );
 }

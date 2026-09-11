@@ -4,6 +4,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnitStore } from '@/store/unit.store';
 import { WorkoutRepository } from '@/repositories/workout.repository';
 import { summarizeWorkout, type WorkoutSummary } from '@/utils/prs';
@@ -15,6 +16,7 @@ export default function WorkoutSummaryScreen() {
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
   const unit = useUnitStore((s) => s.unit);
+  const insets = useSafeAreaInsets();
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [history, setHistory] = useState<Workout[]>([]);
 
@@ -50,7 +52,7 @@ export default function WorkoutSummaryScreen() {
       />
       <ScrollView
         style={[styles.container, { backgroundColor: c.background }]}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 40) }]}
       >
         <Text style={[styles.hero, { color: c.text }]}>Nice work</Text>
         <Text style={[styles.sub, { color: c.textSecondary }]}>Saved on this device</Text>

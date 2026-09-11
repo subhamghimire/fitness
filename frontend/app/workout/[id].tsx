@@ -7,7 +7,10 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -35,6 +38,7 @@ function ActiveWorkoutInner() {
   const unit = useUnitStore((state) => state.unit);
   const progressionStyle = usePreferencesStore((s) => s.progressionStyle);
   const { showPRs } = usePRToast();
+  const insets = useSafeAreaInsets();
 
   const activeWorkout = useWorkoutStore((s) => s.activeWorkout);
   const isLoading = useWorkoutStore((s) => s.isLoading);
@@ -244,7 +248,10 @@ function ActiveWorkoutInner() {
         }}
       />
 
-      <View style={[styles.container, { backgroundColor: c.background }]}>
+      <KeyboardAvoidingView 
+        style={[styles.container, { backgroundColor: c.background }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
@@ -315,7 +322,7 @@ function ActiveWorkoutInner() {
           )}
         </ScrollView>
 
-        <View style={[styles.bottomBar, { backgroundColor: c.surface, borderTopColor: c.border }]}>
+        <View style={[styles.bottomBar, { backgroundColor: c.surface, borderTopColor: c.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
           <TouchableOpacity
             style={[styles.addExBtn, { backgroundColor: c.accent }]}
             onPress={() => router.push('/workout/exercise-picker')}
@@ -327,7 +334,7 @@ function ActiveWorkoutInner() {
         </View>
 
         <FloatingRestTimer />
-      </View>
+      </KeyboardAvoidingView>
     </>
   );
 }

@@ -4,6 +4,7 @@ import { Tabs } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import { C } from '@/constants/Colors';
 import { Platform, View, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SyncIndicator } from '@/components/SyncIndicator';
 
 function TabIcon(props: { name: React.ComponentProps<typeof FontAwesome>['name']; color: string }) {
@@ -13,6 +14,9 @@ function TabIcon(props: { name: React.ComponentProps<typeof FontAwesome>['name']
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const c = colorScheme === 'dark' ? C.dark : C.light;
+  const insets = useSafeAreaInsets();
+  
+  const bottomPadding = Math.max(insets.bottom, Platform.OS === 'ios' ? 8 : 8);
 
   return (
     <Tabs
@@ -25,9 +29,9 @@ export default function TabLayout() {
           backgroundColor: c.surface,
           borderTopColor: c.border,
           borderTopWidth: StyleSheet.hairlineWidth,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+          paddingBottom: bottomPadding,
           paddingTop: 8,
-          height: Platform.OS === 'ios' ? 82 : 60,
+          height: 60 + bottomPadding,
         },
         tabBarLabelStyle: {
           fontSize: 10,

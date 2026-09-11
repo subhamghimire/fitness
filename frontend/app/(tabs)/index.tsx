@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -32,10 +33,12 @@ export default function HomeScreen() {
   const { activeWorkout, startWorkout, loadActiveWorkout } = useWorkoutStore();
   const { user } = useAuthStore();
 
-  useEffect(() => {
-    loadActiveWorkout();
-    loadRecentWorkouts();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadActiveWorkout();
+      loadRecentWorkouts();
+    }, [])
+  );
 
   const loadRecentWorkouts = async () => {
     try {

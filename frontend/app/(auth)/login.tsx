@@ -65,7 +65,7 @@ export default function LoginScreen() {
         {/* Brand */}
         <View style={styles.brand}>
           <View style={[styles.logoBox, { backgroundColor: c.accent }]}>
-            <Text style={styles.logoEmoji}>⚡</Text>
+            <FontAwesome name="bolt" size={32} color="#fff" />
           </View>
           <Text style={[styles.logoTitle, { color: c.text }]}>Fitness</Text>
           <Text style={[styles.logoSub, { color: c.textSecondary }]}>Your personal workout journal</Text>
