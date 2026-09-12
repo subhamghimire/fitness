@@ -3,7 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import * as bcrypt from "bcrypt";
 import { User } from "./entities/user.entity";
-import { UpdateUserDto, UserQueryDto, ChangePasswordDto, UserResponseDto } from "./dto";
+import { UpdateUserDto, UpdateMeDto, UserQueryDto, ChangePasswordDto, UserResponseDto } from "./dto";
 import { ConfigService } from "@nestjs/config";
 import { createPaginatedResponse } from "src/common/dto";
 
@@ -46,17 +46,23 @@ export class UserService {
     return this.toResponseDto(user);
   }
 
-  async updateUser(id: string, dto: UpdateUserDto): Promise<UserResponseDto> {
-    const user = await this.userRepo.findOne({ where: { id } });
+  async updateMe(id: string, dto: UpdateMeDto): Promise<UserResponseDto> {
+    return this.updateUser(id, dto);
+  }
+
+  async updateUser(id: string, dto: UpdateUserDto | UpdateMeDto): Promise<UserResponseDto> {
+    const user = await this.userRepo.findOne({ where: { id }, relations: { avatar: true } });
     if (!user) throw new NotFoundException("User not found");
 
-    // Check email uniqueness
-    if (dto.email && dto.email !== user.email) {
+    if ("email" in dto && dto.email && dto.email !== user.email) {
       const existing = await this.userRepo.findOne({ where: { email: dto.email } });
       if (existing) throw new BadRequestException("Email already exists");
     }
 
-    Object.assign(user, dto);
+    if (dto.name !== undefined) user.name = dto.name;
+    if (dto.age !== undefined) user.age = dto.age;
+    if (dto.gender !== undefined) user.gender = dto.gender;
+    if ("email" in dto && dto.email !== undefined) user.email = dto.email;
 
     const savedUser = await this.userRepo.save(user);
     return this.toResponseDto(savedUser);
@@ -101,9 +107,19 @@ export class UserService {
   }
 
   private toResponseDto(user: User): UserResponseDto {
+    const appUrl = this.configService.get<string>("APP_URL") || "";
+    const avatar = user.avatar?.path ? `${appUrl}/${user.avatar.path}` : null;
     return {
-      ...user,
-      avatar: user.avatar ? `${this.configService.get<string>("APP_URL")}/${user.avatar.path}` : null
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      age: user.age,
+      gender: user.gender,
+      avatar,
+      photoUrl: user.googlePhotoUrl || avatar || null,
+      isDeleted: user.isDeleted,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
     };
   }
 }

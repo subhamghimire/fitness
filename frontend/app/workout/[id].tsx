@@ -236,17 +236,12 @@ function ActiveWorkoutInner() {
             </View>
           ),
           headerRight: () => (
-            <View style={styles.headerRight}>
-              <TouchableOpacity
-                onPress={() => router.push('/workout/plates')}
-                hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
-              >
-                <FontAwesome name="circle-o" size={16} color={c.textSecondary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleFinish} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Text style={[styles.headerBtnText, { color: c.accent }]}>Finish</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              onPress={() => router.push('/workout/plates')}
+              hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+            >
+              <FontAwesome name="circle-o" size={16} color={c.textSecondary} />
+            </TouchableOpacity>
           ),
         }}
       />
@@ -326,14 +321,30 @@ function ActiveWorkoutInner() {
           )}
         </ScrollView>
 
-        <View style={[styles.bottomBar, { backgroundColor: c.surface, borderTopColor: c.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <View
+          style={[
+            styles.bottomBar,
+            {
+              backgroundColor: c.surface,
+              borderTopColor: c.border,
+              paddingBottom: Math.max(insets.bottom, 12),
+            },
+          ]}
+        >
           <TouchableOpacity
-            style={[styles.addExBtn, { backgroundColor: c.accent }]}
+            style={[styles.addExBtn, { backgroundColor: c.surfaceElevated }]}
             onPress={() => router.push('/workout/exercise-picker')}
-            activeOpacity={0.8}
+            activeOpacity={0.75}
           >
-            <FontAwesome name="plus" size={14} color="#fff" />
-            <Text style={styles.addExText}>Add Exercise</Text>
+            <FontAwesome name="plus" size={13} color={c.text} />
+            <Text style={[styles.addExText, { color: c.text }]}>Add Exercise</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.finishBtn, { backgroundColor: c.accent }]}
+            onPress={handleFinish}
+            activeOpacity={0.82}
+          >
+            <Text style={styles.finishText}>Finish</Text>
           </TouchableOpacity>
         </View>
 
@@ -358,7 +369,6 @@ const styles = StyleSheet.create({
   backBtn: { paddingHorizontal: 18, paddingVertical: 11, borderRadius: 10 },
   backBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   headerBtnText: { fontSize: 16, fontWeight: '600', paddingHorizontal: 4 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   timerContainer: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   timerDot: { width: 7, height: 7, borderRadius: 4 },
   scroll: { flex: 1 },
@@ -384,11 +394,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 16,
-    paddingBottom: 28,
     paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: 10,
   },
   addExBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -396,5 +408,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
   },
-  addExText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  addExText: { fontSize: 16, fontWeight: '600' },
+  finishBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  finishText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

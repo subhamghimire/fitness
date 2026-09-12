@@ -1,22 +1,21 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
+  Alert,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
-  Alert,
   ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
-import { FontAwesome } from '@expo/vector-icons';
-import { useAuthStore } from '@/store/auth.store';
-import { useColorScheme } from '@/components/useColorScheme';
-import { C } from '@/constants/Colors';
+import { NativeTextField } from '@/components/ui/NativeTextField';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { GoogleSignInButton, isGoogleAuthConfigured } from '@/components/GoogleSignInButton';
+import { C } from '@/constants/Colors';
+import { useColorScheme } from '@/components/useColorScheme';
+import { useAuthStore } from '@/store/auth.store';
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState('');
@@ -30,19 +29,19 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!email.trim() || !password.trim() || !confirm.trim()) {
-      Alert.alert('Error', 'Fill in all fields');
+      Alert.alert('Missing fields', 'Fill in all fields.');
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      Alert.alert('Error', 'Invalid email address');
+      Alert.alert('Invalid email', 'Check the address and try again.');
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      Alert.alert('Weak password', 'Use at least 6 characters.');
       return;
     }
     if (password !== confirm) {
-      Alert.alert('Error', 'Passwords do not match');
+      Alert.alert('Mismatch', 'Passwords do not match.');
       return;
     }
     try {
@@ -73,91 +72,46 @@ export default function RegisterScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.inner}>
-          <View style={styles.brand}>
-            <View style={[styles.logoBox, { backgroundColor: c.accent }]}>
-              <FontAwesome name="bolt" size={32} color="#fff" />
-            </View>
-            <Text style={[styles.logoTitle, { color: c.text }]}>Fitness</Text>
-            <Text style={[styles.logoSub, { color: c.textSecondary }]}>Create your account</Text>
+          <Text style={[styles.title, { color: c.text }]}>Create Account</Text>
+
+          <View style={styles.fields}>
+            <NativeTextField
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              editable={!isLoading}
+              placeholder="you@example.com"
+            />
+            <NativeTextField
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              textContentType="newPassword"
+              editable={!isLoading}
+              placeholder="At least 6 characters"
+              hint="At least 6 characters"
+            />
+            <NativeTextField
+              label="Confirm password"
+              value={confirm}
+              onChangeText={setConfirm}
+              secureTextEntry
+              textContentType="newPassword"
+              editable={!isLoading}
+              placeholder="Repeat password"
+            />
           </View>
 
-          <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-            <Text style={[styles.cardTitle, { color: c.text }]}>Get started</Text>
+          <PrimaryButton label="Create Account" onPress={handleRegister} loading={isLoading} />
 
-            <View style={styles.fields}>
-              {[
-                {
-                  label: 'Email',
-                  value: email,
-                  onSet: setEmail,
-                  type: 'email-address' as const,
-                  content: 'emailAddress' as const,
-                  secure: false,
-                  hint: undefined as string | undefined,
-                },
-                {
-                  label: 'Password',
-                  value: password,
-                  onSet: setPassword,
-                  type: 'default' as const,
-                  content: 'newPassword' as const,
-                  secure: true,
-                  hint: 'At least 6 characters',
-                },
-                {
-                  label: 'Confirm Password',
-                  value: confirm,
-                  onSet: setConfirm,
-                  type: 'default' as const,
-                  content: 'newPassword' as const,
-                  secure: true,
-                  hint: undefined,
-                },
-              ].map((f) => (
-                <View key={f.label} style={styles.field}>
-                  <Text style={[styles.label, { color: c.textSecondary }]}>{f.label}</Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      { backgroundColor: c.surfaceElevated, color: c.text, borderColor: c.border },
-                    ]}
-                    placeholder={f.label}
-                    placeholderTextColor={c.textTertiary}
-                    value={f.value}
-                    onChangeText={f.onSet}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    keyboardType={f.type}
-                    textContentType={f.content}
-                    secureTextEntry={f.secure}
-                    editable={!isLoading}
-                  />
-                  {f.hint ? <Text style={[styles.hint, { color: c.textTertiary }]}>{f.hint}</Text> : null}
-                </View>
-              ))}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.cta, { backgroundColor: c.accent, opacity: isLoading ? 0.7 : 1 }]}
-              onPress={handleRegister}
-              disabled={isLoading}
-              activeOpacity={0.85}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.ctaText}>Create Account</Text>
-              )}
-            </TouchableOpacity>
-
-            {googleEnabled ? (
-              <GoogleSignInButton
-                onSuccess={handleGoogleSuccess}
-                disabled={isLoading}
-                isDark={isDark}
-              />
-            ) : null}
-          </View>
+          {googleEnabled ? (
+            <GoogleSignInButton onSuccess={handleGoogleSuccess} disabled={isLoading} isDark={isDark} />
+          ) : null}
 
           <View style={styles.footer}>
             <Text style={[styles.footerText, { color: c.textSecondary }]}>Already have an account? </Text>
@@ -176,37 +130,10 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flexGrow: 1 },
-  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48, gap: 28 },
-  brand: { alignItems: 'center', gap: 10 },
-  logoBox: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoTitle: { fontSize: 34, fontWeight: '800', letterSpacing: -1 },
-  logoSub: { fontSize: 15, fontWeight: '500' },
-  card: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 24,
-    gap: 20,
-  },
-  cardTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
+  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48, gap: 22 },
+  title: { fontSize: 34, fontWeight: '700', letterSpacing: 0.37 },
   fields: { gap: 14 },
-  field: { gap: 6 },
-  label: { fontSize: 13, fontWeight: '600', letterSpacing: 0.2 },
-  input: { height: 50, borderRadius: 13, paddingHorizontal: 16, fontSize: 16, borderWidth: 1 },
-  hint: { fontSize: 12, fontWeight: '500' },
-  cta: {
-    height: 52,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  ctaText: { color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
-  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-  footerText: { fontSize: 14, fontWeight: '500' },
-  footerLink: { fontSize: 14, fontWeight: '700' },
+  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' },
+  footerText: { fontSize: 15 },
+  footerLink: { fontSize: 15, fontWeight: '600' },
 });

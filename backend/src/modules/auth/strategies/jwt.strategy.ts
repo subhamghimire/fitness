@@ -12,7 +12,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({ jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), ignoreExpiration: false, secretOrKey: configService.get('JWT_SECRET') || 'fallback-secret' });
   }
   async validate(payload: JwtPayload): Promise<User> {
-    const user = await this.usersRepository.findOne({ where: { id: payload.sub } });
+    const user = await this.usersRepository.findOne({
+      where: { id: payload.sub },
+      relations: { avatar: true }
+    });
     if (!user) throw new UnauthorizedException('User not found');
     return user;
   }

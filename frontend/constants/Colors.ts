@@ -1,57 +1,68 @@
 const palette = {
-  // Brand
-  accent: '#5E5CE6', // Futuristic rich purple/blue
-  accentSoft: 'rgba(94, 92, 230, 0.15)',
-  accentMid: 'rgba(94, 92, 230, 0.25)',
+  // Primary CTA — warm rust, used for Start / Finish only
+  accent: '#D94A32',
+  accentSoft: 'rgba(217, 74, 50, 0.12)',
+  accentMid: 'rgba(217, 74, 50, 0.22)',
 
-  // Semantic
-  success: '#32D74B', // Vibrant green
-  successSoft: 'rgba(50, 215, 75, 0.15)',
-  danger: '#FF453A', // Failure set red
-  dangerSoft: 'rgba(255, 69, 58, 0.15)',
-  warning: '#FF9F0A', // General warning orange
-  warningSoft: 'rgba(255, 159, 10, 0.15)',
-  
-  // Set Types
-  dropSet: '#BF5AF2', // Drop set purple
-  dropSetSoft: 'rgba(191, 90, 242, 0.15)',
-  warmup: '#0A84FF', // Warm-up blue
-  warmupSoft: 'rgba(10, 132, 255, 0.15)',
+  success: '#30D158',
+  successSoft: 'rgba(48, 209, 88, 0.16)',
+  danger: '#FF453A',
+  dangerSoft: 'rgba(255, 69, 58, 0.14)',
+  warning: '#FF9F0A',
+  warningSoft: 'rgba(255, 159, 10, 0.14)',
+
+  dropSet: '#BF5AF2',
+  dropSetSoft: 'rgba(191, 90, 242, 0.14)',
+  warmup: '#0A84FF',
+  warmupSoft: 'rgba(10, 132, 255, 0.14)',
 };
 
 export const C = {
   dark: {
-    background: '#0F1115',
-    surface: '#1A1C23',
-    surfaceElevated: '#252731',
-    border: '#2E303B',
+    background: '#000000',
+    surface: '#1C1C1E',
+    surfaceElevated: '#2C2C2E',
+    grouped: '#000000',
+    border: 'rgba(84, 84, 88, 0.65)',
     tint: palette.accent,
     text: '#FFFFFF',
-    textSecondary: '#8E8EA0', // Strong clean grey
-    textTertiary: '#48485A',
-    textGhost: '#343442',
-    tabIconDefault: '#48485A',
+    textSecondary: '#8E8E93',
+    textTertiary: '#636366',
+    textGhost: '#48484A',
+    tabIconDefault: '#636366',
     tabIconSelected: palette.accent,
     ...palette,
   },
   light: {
-    background: '#F5F5FA',
+    background: '#F2F2F7',
     surface: '#FFFFFF',
-    surfaceElevated: '#EFEFFA',
-    border: '#E5E5F0',
+    surfaceElevated: '#E5E5EA',
+    grouped: '#F2F2F7',
+    border: 'rgba(60, 60, 67, 0.18)',
     tint: palette.accent,
-    text: '#0F1115',
-    textSecondary: '#6B6B80',
-    textTertiary: '#ADADC0',
-    textGhost: '#D1D1DF',
-    tabIconDefault: '#ADADC0',
+    text: '#000000',
+    textSecondary: '#6C6C70',
+    textTertiary: '#8E8E93',
+    textGhost: '#C7C7CC',
+    tabIconDefault: '#8E8E93',
     tabIconSelected: palette.accent,
     ...palette,
   },
 };
 
-// Keep legacy default export shape so old imports don't break
 export default {
-  light: { text: C.light.text, background: C.light.background, tint: C.light.tint, tabIconDefault: C.light.tabIconDefault, tabIconSelected: C.light.tabIconSelected },
-  dark:  { text: C.dark.text,  background: C.dark.background,  tint: C.dark.tint,  tabIconDefault: C.dark.tabIconDefault,  tabIconSelected: C.dark.tabIconSelected  },
+  light: {
+    text: C.light.text,
+    background: C.light.background,
+    tint: C.light.tint,
+    tabIconDefault: C.light.tabIconDefault,
+    tabIconSelected: C.light.tabIconSelected,
+  },
+  dark: {
+    text: C.dark.text,
+    background: C.dark.background,
+    tint: C.dark.tint,
+    tabIconDefault: C.dark.tabIconDefault,
+    tabIconSelected: C.dark.tabIconSelected,
+  },
 };

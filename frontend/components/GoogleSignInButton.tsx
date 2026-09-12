@@ -101,12 +101,12 @@ export function GoogleSignInButton({
 const styles = StyleSheet.create({
   googleBtn: {
     height: 50,
-    borderRadius: 13,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
     flexDirection: 'row',
     gap: 8,
   },
-  googleBtnText: { fontSize: 15, fontWeight: '700' },
+  googleBtnText: { fontSize: 16, fontWeight: '600' },
 });

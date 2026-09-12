@@ -1,4 +1,4 @@
-import { authApi } from '@/services/api';
+import { authApi, mapServerUser, usersApi, type UpdateProfilePayload } from '@/services/api';
 import type { User } from '@/types';
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
@@ -17,6 +17,8 @@ interface AuthState {
   loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
   initialize: () => Promise<void>;
+  updateProfile: (payload: UpdateProfilePayload) => Promise<void>;
+  refreshProfile: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -34,7 +36,7 @@ function scheduleFirstSync() {
   }, 0);
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
   user: null,
   isAuthenticated: false,
@@ -46,7 +48,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     const token = await SecureStore.getItemAsync(TOKEN_KEY);
     const userJson = await SecureStore.getItemAsync(USER_KEY);
     if (token && userJson) {
-      set({ token, user: JSON.parse(userJson), isAuthenticated: true, isLoading: false });
+      set({ token, user: JSON.parse(userJson) as User, isAuthenticated: true, isLoading: false });
     } else {
       set({ isLoading: false });
     }
@@ -57,8 +59,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { data } = await authApi.login(email, password);
       const token = data.tokens.accessToken;
-      await persistSession(token, data.user);
-      set({ token, user: data.user, isAuthenticated: true, isLoading: false });
+      const user = mapServerUser(data.user);
+      await persistSession(token, user);
+      set({ token, user, isAuthenticated: true, isLoading: false });
       scheduleFirstSync();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Login failed';
@@ -72,8 +75,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { data } = await authApi.register(email, password);
       const token = data.tokens.accessToken;
-      await persistSession(token, data.user);
-      set({ token, user: data.user, isAuthenticated: true, isLoading: false });
+      const user = mapServerUser(data.user);
+      await persistSession(token, user);
+      set({ token, user, isAuthenticated: true, isLoading: false });
       scheduleFirstSync();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Registration failed';
@@ -87,8 +91,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { data } = await authApi.googleLogin(idToken);
       const token = data.tokens.accessToken;
-      await persistSession(token, data.user);
-      set({ token, user: data.user, isAuthenticated: true, isLoading: false });
+      const user = mapServerUser(data.user);
+      await persistSession(token, user);
+      set({ token, user, isAuthenticated: true, isLoading: false });
       scheduleFirstSync();
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Google login failed';
@@ -111,6 +116,37 @@ export const useAuthStore = create<AuthState>((set) => ({
       useTimerStore.getState().stopTimer();
     } catch {
       // ignore
+    }
+  },
+
+  updateProfile: async (payload) => {
+    const current = get().user;
+    if (!current?.id) throw new Error('Not signed in');
+    const { data } = await usersApi.updateMe(current.id, payload);
+    const token = await SecureStore.getItemAsync(TOKEN_KEY);
+    const user = mapServerUser({
+      ...current,
+      ...data,
+      photoUrl: data.photoUrl ?? current.photoUrl,
+    });
+    if (token) await persistSession(token, user);
+    set({ user });
+  },
+
+  refreshProfile: async () => {
+    const current = get().user;
+    try {
+      const { data } = await usersApi.getMe(current?.id);
+      const token = await SecureStore.getItemAsync(TOKEN_KEY);
+      const user = mapServerUser({
+        ...current,
+        ...data,
+        photoUrl: data.photoUrl ?? current?.photoUrl,
+      });
+      if (token) await persistSession(token, user);
+      set({ user });
+    } catch {
+      // Keep cached user if the request fails
     }
   },
 

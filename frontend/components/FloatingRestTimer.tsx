@@ -48,7 +48,7 @@ function FloatingRestTimerComponent() {
     <Animated.View
       style={[
         styles.container,
-        { bottom: 72 + Math.max(insets.bottom, 8), transform: [{ translateY }] },
+        { bottom: 84 + Math.max(insets.bottom, 8), transform: [{ translateY }] },
       ]}
       pointerEvents="box-none"
     >

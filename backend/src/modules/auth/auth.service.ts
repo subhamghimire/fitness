@@ -267,6 +267,8 @@ export class AuthService {
       email: user.email,
       name: user.name,
       photoUrl: user.googlePhotoUrl || avatarFromFile || undefined,
+      age: user.age,
+      gender: user.gender,
       createdAt: user.createdAt.toISOString()
     };
   }

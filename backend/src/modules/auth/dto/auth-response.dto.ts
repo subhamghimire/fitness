@@ -13,6 +13,12 @@ export class UserResponseDto {
   @ApiPropertyOptional()
   photoUrl?: string;
 
+  @ApiPropertyOptional()
+  age?: number;
+
+  @ApiPropertyOptional()
+  gender?: string;
+
   @ApiProperty()
   createdAt: string;
 }

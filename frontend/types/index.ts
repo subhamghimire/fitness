@@ -1,8 +1,12 @@
+export type Gender = 'male' | 'female' | 'other';
+
 export interface User {
   id: string;
   email: string;
   name?: string;
-  photoUrl?: string;
+  photoUrl?: string | null;
+  age?: number | null;
+  gender?: Gender | null;
   createdAt: string;
 }
 

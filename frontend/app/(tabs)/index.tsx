@@ -1,63 +1,58 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-} from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { FontAwesome } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useWorkoutStore } from '@/store/workout.store';
-import { useAuthStore } from '@/store/auth.store';
-import { WorkoutRepository } from '@/repositories/workout.repository';
-import { useColorScheme } from '@/components/useColorScheme';
-import { formatDate, formatDuration } from '@/utils/date';
+import { Ionicons } from '@expo/vector-icons';
+import { GroupedRow } from '@/components/ui/GroupedRow';
+import { GroupedSection } from '@/components/ui/GroupedSection';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { WorkoutTimer } from '@/components/WorkoutTimer';
 import { C } from '@/constants/Colors';
+import { useColorScheme } from '@/components/useColorScheme';
+import { TemplateRepository } from '@/repositories/template.repository';
+import { WorkoutRepository } from '@/repositories/workout.repository';
+import { useAuthStore } from '@/store/auth.store';
+import { useWorkoutStore } from '@/store/workout.store';
+import type { Template, Workout } from '@/types';
+import { formatDate, formatDuration } from '@/utils/date';
 import { getWeeklySummary } from '@/utils/prs';
-import type { Workout } from '@/types';
-import type { WeeklySummary } from '@/utils/prs';
 
 export default function HomeScreen() {
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
-  const [weekSummary, setWeekSummary] = useState<WeeklySummary | null>(null);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const router = useRouter();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
 
   const activeWorkout = useWorkoutStore((s) => s.activeWorkout);
   const startWorkout = useWorkoutStore((s) => s.startWorkout);
+  const startFromTemplateStore = useWorkoutStore((s) => s.startFromTemplate);
   const loadActiveWorkout = useWorkoutStore((s) => s.loadActiveWorkout);
   const user = useAuthStore((s) => s.user);
-  const [loadingRecent, setLoadingRecent] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      loadActiveWorkout();
-      loadRecentWorkouts();
-    }, [])
+      void loadActiveWorkout();
+      void loadHome();
+    }, [loadActiveWorkout])
   );
 
-  const loadRecentWorkouts = async () => {
+  const loadHome = async () => {
     try {
-      const workouts = await WorkoutRepository.getHistory(40, 0);
+      const [workouts, tpls] = await Promise.all([
+        WorkoutRepository.getHistory(40, 0),
+        TemplateRepository.getAll(),
+      ]);
       setRecentWorkouts(workouts.slice(0, 5));
-      setWeekSummary(getWeeklySummary(workouts));
+      setTemplates(tpls.slice(0, 8));
     } catch {
-      // Keep prior data if refresh fails
-    } finally {
-      setLoadingRecent(false);
+      // keep last good data
     }
   };
 
   const handleStartWorkout = async () => {
     try {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       const workoutId = await startWorkout();
       router.push(`/workout/${workoutId}`);
     } catch {
@@ -65,19 +60,23 @@ export default function HomeScreen() {
     }
   };
 
-  const handleContinueWorkout = () => {
-    if (activeWorkout) router.push(`/workout/${activeWorkout.id}`);
+  const startFromTemplate = async (t: Template) => {
+    if (activeWorkout) {
+      Alert.alert('Workout in progress', 'Finish or discard your current workout first.');
+      return;
+    }
+    try {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const id = await startFromTemplateStore(t);
+      router.push(`/workout/${id}`);
+    } catch {
+      Alert.alert('Error', 'Could not start from template');
+    }
   };
 
   const getTotalSets = (w: Workout) => w.exercises.reduce((s, ex) => s + ex.sets.length, 0);
-
-  const weekWorkouts = recentWorkouts.filter((w) => {
-    const ago = new Date();
-    ago.setDate(ago.getDate() - 7);
-    return new Date(w.startedAt) > ago;
-  });
-
-  const displayName = user?.email?.split('@')[0] || 'there';
+  const weekSummary = getWeeklySummary(recentWorkouts);
+  const displayName = user?.name?.trim() || user?.email?.split('@')[0] || 'there';
 
   return (
     <ScrollView
@@ -85,114 +84,91 @@ export default function HomeScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.greeting}>
-        <Text style={[styles.greetSub, { color: c.textSecondary }]}>Today</Text>
-        <Text style={[styles.greetName, { color: c.text }]} numberOfLines={1}>
-          {displayName}
-        </Text>
-      </View>
+      <Text style={[styles.kicker, { color: c.textSecondary }]}>Quick Start</Text>
+      <Text style={[styles.hello, { color: c.text }]} numberOfLines={1}>
+        {displayName}
+      </Text>
 
-      {activeWorkout && (
+      {activeWorkout ? (
         <TouchableOpacity
-          style={[styles.activeBanner, { backgroundColor: c.accent }]}
-          onPress={handleContinueWorkout}
-          activeOpacity={0.88}
+          style={[styles.active, { backgroundColor: c.surface }]}
+          onPress={() => router.push(`/workout/${activeWorkout.id}`)}
+          activeOpacity={0.75}
         >
-          <View style={styles.activeBannerLeft}>
-            <View style={[styles.pulsingDot, { backgroundColor: 'rgba(255,255,255,0.75)' }]} />
+          <View style={styles.activeLeft}>
+            <View style={[styles.liveDot, { backgroundColor: c.success }]} />
             <View>
-              <Text style={styles.activeBannerTitle}>Workout in progress</Text>
-              <WorkoutTimer
-                startTime={activeWorkout.startedAt}
-                textColor="rgba(255,255,255,0.75)"
-                fontSize={13}
-              />
+              <Text style={[styles.activeTitle, { color: c.text }]}>In progress</Text>
+              <WorkoutTimer startTime={activeWorkout.startedAt} textColor={c.textSecondary} fontSize={13} />
             </View>
           </View>
-          <View style={styles.activeBannerRight}>
-            <Text style={styles.activeBannerCta}>Continue</Text>
-            <FontAwesome name="chevron-right" size={12} color="#fff" />
-          </View>
+          <Text style={[styles.activeCta, { color: c.accent }]}>Continue</Text>
         </TouchableOpacity>
+      ) : (
+        <PrimaryButton label="Start Empty Workout" onPress={handleStartWorkout} />
       )}
 
-      {!activeWorkout && (
-        <TouchableOpacity
-          style={[styles.startBtn, { backgroundColor: c.accent }]}
-          onPress={handleStartWorkout}
-          activeOpacity={0.85}
-        >
-          <FontAwesome name="plus" size={16} color="#fff" />
-          <Text style={styles.startBtnText}>Start Empty Workout</Text>
-        </TouchableOpacity>
-      )}
-
-      <View style={styles.statsRow}>
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: c.text }]}>{weekSummary?.workouts ?? weekWorkouts.length}</Text>
-          <Text style={[styles.statLabel, { color: c.textSecondary }]}>This week</Text>
+      <View style={styles.week}>
+        <View style={styles.weekCell}>
+          <Text style={[styles.weekValue, { color: c.text }]}>{weekSummary.workouts}</Text>
+          <Text style={[styles.weekLabel, { color: c.textSecondary }]}>This week</Text>
         </View>
-        <View style={[styles.statDivider, { backgroundColor: c.border }]} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: c.text }]}>
-            {weekSummary?.workingSets ?? weekWorkouts.reduce((s, w) => s + getTotalSets(w), 0)}
-          </Text>
-          <Text style={[styles.statLabel, { color: c.textSecondary }]}>Sets</Text>
+        <View style={[styles.weekRule, { backgroundColor: c.border }]} />
+        <View style={styles.weekCell}>
+          <Text style={[styles.weekValue, { color: c.text }]}>{weekSummary.workingSets}</Text>
+          <Text style={[styles.weekLabel, { color: c.textSecondary }]}>Sets</Text>
         </View>
-        <View style={[styles.statDivider, { backgroundColor: c.border }]} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: c.text }]}>
-            {weekSummary ? `${(weekSummary.volume / 1000).toFixed(1)}k` : recentWorkouts.length}
+        <View style={[styles.weekRule, { backgroundColor: c.border }]} />
+        <View style={styles.weekCell}>
+          <Text style={[styles.weekValue, { color: c.text }]}>
+            {(weekSummary.volume / 1000).toFixed(1)}k
           </Text>
-          <Text style={[styles.statLabel, { color: c.textSecondary }]}>
-            {weekSummary ? 'Volume' : 'Recent'}
-          </Text>
+          <Text style={[styles.weekLabel, { color: c.textSecondary }]}>Volume</Text>
         </View>
       </View>
 
-      {weekSummary && weekSummary.observations[0] ? (
-        <Text style={[styles.weekNote, { color: c.textSecondary }]}>{weekSummary.observations[0]}</Text>
-      ) : null}
+      {templates.length > 0 ? (
+        <GroupedSection title="Templates" style={styles.flushSection}>
+          {templates.map((t, i) => (
+            <GroupedRow
+              key={t.id}
+              label={t.name}
+              value={`${t.exercises.length}`}
+              last={i === templates.length - 1}
+              onPress={() => startFromTemplate(t)}
+            />
+          ))}
+        </GroupedSection>
+      ) : (
+        <GroupedSection
+          title="Templates"
+          footer="Save a routine once. Start it in one tap next time."
+          style={styles.flushSection}
+        >
+          <GroupedRow label="Create a template" last onPress={() => router.push('/template/new')} />
+        </GroupedSection>
+      )}
 
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: c.text }]}>Recent</Text>
-
-        {loadingRecent && recentWorkouts.length === 0 ? (
-          <View style={styles.emptyBlock}>
-            <Text style={[styles.emptyBody, { color: c.textSecondary }]}>Loading…</Text>
-          </View>
-        ) : recentWorkouts.length === 0 ? (
-          <View style={styles.emptyBlock}>
-            <Text style={[styles.emptyTitle, { color: c.text }]}>No workouts yet</Text>
-            <Text style={[styles.emptyBody, { color: c.textSecondary }]}>
-              Start a workout to begin tracking
-            </Text>
-          </View>
+      <View style={styles.recentBlock}>
+        <Text style={[styles.recentTitle, { color: c.textSecondary }]}>RECENT</Text>
+        {recentWorkouts.length === 0 ? (
+          <Text style={[styles.empty, { color: c.textTertiary }]}>No workouts yet</Text>
         ) : (
           recentWorkouts.map((workout) => (
             <TouchableOpacity
               key={workout.id}
-              style={[styles.workoutRow, { borderBottomColor: c.border }]}
+              style={[styles.recentRow, { borderBottomColor: c.border }]}
               onPress={() => router.push(`/workout/detail/${workout.id}`)}
               activeOpacity={0.65}
             >
-              <View style={styles.workoutCardHead}>
-                <Text style={[styles.workoutDate, { color: c.text }]}>{formatDate(workout.startedAt)}</Text>
-                {workout.syncStatus === 'synced' ? (
-                  <Text style={[styles.syncMeta, { color: c.success }]}>Synced</Text>
-                ) : workout.syncStatus === 'pending' ? (
-                  <Text style={[styles.syncMeta, { color: c.textTertiary }]}>Pending</Text>
-                ) : null}
+              <View style={styles.recentHead}>
+                <Text style={[styles.recentDate, { color: c.text }]}>{formatDate(workout.startedAt)}</Text>
+                <Ionicons name="chevron-forward" size={14} color={c.textTertiary} />
               </View>
-              <Text style={[styles.metaItem, { color: c.textSecondary }]}>
+              <Text style={[styles.recentMeta, { color: c.textSecondary }]}>
                 {workout.exercises.length} exercises · {getTotalSets(workout)} sets ·{' '}
                 {formatDuration(workout.startedAt, workout.endedAt)}
               </Text>
-              {workout.exercises.length > 0 && (
-                <Text style={[styles.exerciseChips, { color: c.textTertiary }]} numberOfLines={1}>
-                  {workout.exercises.map((e) => e.name).join('  ·  ')}
-                </Text>
-              )}
             </TouchableOpacity>
           ))
         )}
@@ -203,59 +179,36 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: 18, paddingTop: 20, paddingBottom: 36 },
-  greeting: { marginBottom: 20 },
-  greetSub: { fontSize: 15, fontWeight: '500', marginBottom: 2 },
-  greetName: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
-  activeBanner: {
+  content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40, gap: 18 },
+  kicker: { fontSize: 13, fontWeight: '400' },
+  hello: { fontSize: 34, fontWeight: '700', letterSpacing: 0.37, marginTop: -10 },
+  active: {
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 14,
   },
-  activeBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  pulsingDot: { width: 8, height: 8, borderRadius: 4 },
-  activeBannerTitle: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  activeBannerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  activeBannerCta: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  startBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    borderRadius: 14,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    marginBottom: 20,
-  },
-  startBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-    paddingVertical: 4,
-  },
-  statItem: { flex: 1, alignItems: 'center' },
-  statDivider: { width: StyleSheet.hairlineWidth, height: 28 },
-  statValue: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
-  statLabel: { fontSize: 11, fontWeight: '500', marginTop: 2 },
-  weekNote: { fontSize: 13, fontWeight: '500', marginBottom: 16, lineHeight: 18 },
-  section: { gap: 0 },
-  sectionTitle: { fontSize: 17, fontWeight: '700', marginBottom: 8 },
-  emptyBlock: { alignItems: 'center', paddingVertical: 28, gap: 6 },
-  emptyTitle: { fontSize: 16, fontWeight: '600' },
-  emptyBody: { fontSize: 14, textAlign: 'center' },
-  workoutRow: {
+  activeLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  liveDot: { width: 8, height: 8, borderRadius: 4 },
+  activeTitle: { fontSize: 17, fontWeight: '600' },
+  activeCta: { fontSize: 17, fontWeight: '600' },
+  week: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
+  weekCell: { flex: 1, alignItems: 'center' },
+  weekRule: { width: StyleSheet.hairlineWidth, height: 28 },
+  weekValue: { fontSize: 22, fontWeight: '600', letterSpacing: 0.3 },
+  weekLabel: { fontSize: 12, marginTop: 2 },
+  flushSection: { paddingHorizontal: 0 },
+  recentBlock: { paddingHorizontal: 4 },
+  recentTitle: { fontSize: 13, marginBottom: 4, marginLeft: 4 },
+  empty: { paddingVertical: 20, textAlign: 'center', fontSize: 15 },
+  recentRow: {
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 4,
+    gap: 3,
   },
-  workoutCardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  workoutDate: { fontSize: 15, fontWeight: '600' },
-  syncMeta: { fontSize: 11, fontWeight: '600' },
-  metaItem: { fontSize: 13, fontWeight: '500' },
-  exerciseChips: { fontSize: 12, fontWeight: '400', marginTop: 2 },
+  recentHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  recentDate: { fontSize: 17, fontWeight: '600' },
+  recentMeta: { fontSize: 13 },
 });

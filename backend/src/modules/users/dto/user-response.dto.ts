@@ -21,6 +21,9 @@ export class UserResponseDto {
   @ApiProperty({ example: "uploads/avatars/avatar.jpg", required: false })
   avatar: string | null;
 
+  @ApiProperty({ example: "https://lh3.googleusercontent.com/a/photo", required: false })
+  photoUrl?: string | null;
+
   @ApiProperty({ example: false })
   isDeleted: boolean;
 

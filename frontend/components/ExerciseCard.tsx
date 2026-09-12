@@ -103,7 +103,7 @@ function ExerciseCardComponent({
 
       <View style={styles.colHeaders}>
         <Text style={[styles.colLabel, styles.colSet, { color: c.textTertiary }]}>SET</Text>
-        <Text style={[styles.colLabel, styles.colPrev, { color: c.textTertiary }]}>PREV</Text>
+        <Text style={[styles.colLabel, styles.colPrev, { color: c.textTertiary }]}>PREVIOUS</Text>
         <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>{unit.toUpperCase()}</Text>
         <Text style={[styles.colLabel, styles.colVal, { color: c.textTertiary }]}>REPS</Text>
         <Text style={[styles.colLabel, styles.colActLabel, { color: c.textTertiary }]}>✓</Text>
@@ -145,8 +145,8 @@ export const ExerciseCard = memo(ExerciseCardComponent);
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 14,
-    marginBottom: 14,
+    borderRadius: 12,
+    marginBottom: 12,
     overflow: 'hidden',
   },
   header: {
@@ -198,21 +198,22 @@ const styles = StyleSheet.create({
   },
   colHeaders: {
     flexDirection: 'row',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 4,
     marginBottom: 2,
     alignItems: 'center',
+    gap: 8,
   },
   colLabel: {
     fontSize: 10,
     fontWeight: '600',
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
     textAlign: 'center',
   },
-  colSet: { width: 30 },
-  colPrev: { width: 64, marginLeft: 10 },
-  colVal: { flex: 1, marginLeft: 10 },
-  colActLabel: { width: 34, marginLeft: 10, textAlign: 'center' },
+  colSet: { width: 36 },
+  colPrev: { width: 72 },
+  colVal: { flex: 1 },
+  colActLabel: { width: 36, textAlign: 'center' },
   sets: {
     paddingBottom: 4,
   },

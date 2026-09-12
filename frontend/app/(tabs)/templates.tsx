@@ -1,27 +1,28 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import { FontAwesome, Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useState } from 'react';
+import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useWorkoutStore } from '@/store/workout.store';
-import { useColorScheme } from '@/components/useColorScheme';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { GroupedRow } from '@/components/ui/GroupedRow';
+import { GroupedSection } from '@/components/ui/GroupedSection';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { C } from '@/constants/Colors';
+import { useColorScheme } from '@/components/useColorScheme';
 import { TemplateRepository } from '@/repositories/template.repository';
+import { useWorkoutStore } from '@/store/workout.store';
 import type { Template } from '@/types';
 
 export default function TemplatesScreen() {
   const router = useRouter();
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? C.dark : C.light;
-
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadTemplates = async () => {
     setLoading(true);
     try {
-      const data = await TemplateRepository.getAll();
-      setTemplates(data);
+      setTemplates(await TemplateRepository.getAll());
     } catch (e) {
       console.error(e);
     } finally {
@@ -31,7 +32,7 @@ export default function TemplatesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadTemplates();
+      void loadTemplates();
     }, [])
   );
 
@@ -47,66 +48,22 @@ export default function TemplatesScreen() {
     router.push(`/workout/${id}`);
   };
 
-  const handleTemplateOptions = (template: Template) => {
-    Alert.alert(template.name, 'Manage this template', [
+  const handleDeleteTemplate = (template: Template) => {
+    Alert.alert('Delete Template', `Delete “${template.name}”?`, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete Template',
+        text: 'Delete',
         style: 'destructive',
-        onPress: () => handleDeleteTemplate(template),
+        onPress: async () => {
+          try {
+            await TemplateRepository.softDelete(template.id);
+            setTemplates((prev) => prev.filter((item) => item.id !== template.id));
+          } catch {
+            Alert.alert('Delete Failed', 'Unable to delete this template.');
+          }
+        },
       },
     ]);
-  };
-
-  const handleDeleteTemplate = (template: Template) => {
-    Alert.alert(
-      'Delete Template',
-      `Delete "${template.name}" permanently?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await TemplateRepository.softDelete(template.id);
-              setTemplates((prev) => prev.filter((item) => item.id !== template.id));
-            } catch (error) {
-              Alert.alert('Delete Failed', 'Unable to delete this template.');
-              console.error(error);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const renderTemplateCard = ({ item }: { item: Template }) => {
-    const exCount = item.exercises.length;
-    const exNames = item.exercises.slice(0, 3).map(e => e.name).join(', ') + (exCount > 3 ? '...' : '');
-
-    return (
-      <View style={[styles.card, { backgroundColor: c.surface }]}>
-        <View style={styles.cardHeader}>
-          <Text style={[styles.cardTitle, { color: c.text }]}>{item.name}</Text>
-          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => handleTemplateOptions(item)}>
-            <Ionicons name="ellipsis-horizontal" size={20} color={c.textSecondary} />
-          </TouchableOpacity>
-        </View>
-        
-        <Text style={[styles.cardDesc, { color: c.textSecondary }]} numberOfLines={2}>
-          {exCount > 0 ? exNames : 'No exercises'}
-        </Text>
-
-        <TouchableOpacity 
-          style={[styles.startBtn, { backgroundColor: c.accentSoft }]} 
-          onPress={() => startFromTemplate(item)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.startBtnText, { color: c.accent }]}>Start Workout</Text>
-        </TouchableOpacity>
-      </View>
-    );
   };
 
   return (
@@ -114,87 +71,68 @@ export default function TemplatesScreen() {
       <FlatList
         data={templates}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={loadTemplates} tintColor={c.accent} />}
+        contentContainerStyle={styles.list}
+        refreshing={loading}
+        onRefresh={() => void loadTemplates()}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <PrimaryButton label="New Template" onPress={() => router.push('/template/new')} variant="secondary" />
+          </View>
+        }
         ListEmptyComponent={
           !loading ? (
-            <View style={styles.emptyWrap}>
-              <FontAwesome name="clipboard" size={48} color={c.textTertiary} />
-              <Text style={[styles.emptyTitle, { color: c.text }]}>No Templates</Text>
-              <Text style={[styles.emptyDesc, { color: c.textSecondary }]}>Create a template to quickly start your routine without adding exercises manually.</Text>
-            </View>
+            <Text style={[styles.empty, { color: c.textSecondary }]}>
+              No templates yet. Save a routine so the next session starts in one tap.
+            </Text>
           ) : null
         }
-        renderItem={renderTemplateCard}
+        renderItem={({ item }) => {
+          const names = item.exercises.map((e) => e.name).join(', ');
+          return (
+            <GroupedSection style={styles.section}>
+              <View style={styles.cardHead}>
+                <View style={styles.cardCopy}>
+                  <Text style={[styles.cardTitle, { color: c.text }]}>{item.name}</Text>
+                  <Text style={[styles.cardDesc, { color: c.textSecondary }]} numberOfLines={2}>
+                    {names || 'No exercises'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleDeleteTemplate(item)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={18} color={c.textTertiary} />
+                </TouchableOpacity>
+              </View>
+              <GroupedRow
+                label="Start Workout"
+                last
+                onPress={() => startFromTemplate(item)}
+              />
+            </GroupedSection>
+          );
+        }}
       />
-
-      {/* Floating Action Button */}
-      <TouchableOpacity 
-        style={[styles.fab, { backgroundColor: c.accent }]} 
-        onPress={() => router.push('/template/new')}
-        activeOpacity={0.8}
-      >
-        <FontAwesome name="plus" size={20} color="#fff" />
-      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  listContent: { padding: 16, paddingBottom: 100 },
-  card: {
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-  },
-  cardHeader: {
+  list: { paddingTop: 12, paddingBottom: 40 },
+  header: { paddingHorizontal: 16, marginBottom: 16 },
+  section: { marginBottom: 12 },
+  cardHead: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 6,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-    flex: 1,
-  },
-  cardDesc: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  startBtn: {
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  startBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  emptyWrap: {
-    paddingVertical: 60,
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 6,
     gap: 12,
   },
-  emptyTitle: { fontSize: 20, fontWeight: '800' },
-  emptyDesc: { fontSize: 15, textAlign: 'center', paddingHorizontal: 40, lineHeight: 22 },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#5E5CE6',
-    shadowOpacity: 0.4,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 8,
-  },
+  cardCopy: { flex: 1 },
+  cardTitle: { fontSize: 17, fontWeight: '600' },
+  cardDesc: { fontSize: 13, marginTop: 4, lineHeight: 18 },
+  empty: { paddingHorizontal: 32, paddingTop: 28, textAlign: 'center', fontSize: 15, lineHeight: 22 },
 });
