@@ -2,6 +2,7 @@
   "expo": {
     "name": "Fitness",
     "slug": "jgv",
+    "owner": "shekhar_ghimire",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -45,7 +46,7 @@
         "origin": false
       },
       "eas": {
-        "projectId": "727c10f4-8ba9-4595-b4f3-060bf675595e"
+        "projectId": "85268a47-02b6-41d7-aad4-0a9b85f3dc93"
       }
     }
   }
