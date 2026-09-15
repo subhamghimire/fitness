@@ -1,6 +1,6 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PaginatedResponseDto, PaginationMeta } from 'src/common/dto';
-import { CoachTemplateType, DiscountType } from '../enums/coach-template.enum';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { PaginatedResponseDto, PaginationMeta } from "src/common/dto";
+import { CoachTemplateType, DiscountType } from "../enums/coach-template.enum";
 
 export class CoachTemplateResponseDto {
   @ApiProperty()
@@ -24,7 +24,7 @@ export class CoachTemplateResponseDto {
   @ApiPropertyOptional({ enum: DiscountType })
   discountType: DiscountType | null;
 
-  @ApiProperty({ description: 'Final price after discount' })
+  @ApiProperty({ description: "Final price after discount" })
   finalPrice: number;
 
   @ApiProperty()

@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PaginatedResponseDto, PaginationMeta } from 'src/common/dto';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { PaginatedResponseDto, PaginationMeta } from "src/common/dto";
 
 export class UserWorkoutResponseDto {
   @ApiProperty()
@@ -20,7 +20,7 @@ export class UserWorkoutResponseDto {
   @ApiProperty()
   updatedAt: Date;
 
-  @ApiPropertyOptional({ description: 'Exercise details when included' })
+  @ApiPropertyOptional({ description: "Exercise details when included" })
   exercise?: {
     id: string;
     title: string;

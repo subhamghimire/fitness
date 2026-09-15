@@ -1,25 +1,19 @@
-import { Injectable, ConflictException, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan } from 'typeorm';
-import * as bcrypt from 'bcrypt';
-import { v4 as uuidv4 } from 'uuid';
-import { randomBytes, createHash } from 'crypto';
-import { User } from '../users/entities/user.entity';
-import { RefreshToken } from './entities/refresh-token.entity';
-import { PasswordResetToken } from './entities/password-reset-token.entity';
-import { RegisterDto } from './dto/register.dto';
-import { LoginDto } from './dto/login.dto';
-import { 
-  AuthResponseDto, 
-  TokensResponseDto, 
-  UserResponseDto,
-  RefreshTokenResponseDto,
-  MessageResponseDto
-} from './dto/auth-response.dto';
-import { ForgotPasswordDto, ResetPasswordDto, ChangePasswordDto } from './dto/password.dto';
-import { JwtPayload } from './strategies/jwt.strategy';
+import { Injectable, ConflictException, UnauthorizedException, NotFoundException, BadRequestException } from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository, MoreThan } from "typeorm";
+import * as bcrypt from "bcrypt";
+import { v4 as uuidv4 } from "uuid";
+import { randomBytes, createHash } from "crypto";
+import { User } from "../users/entities/user.entity";
+import { RefreshToken } from "./entities/refresh-token.entity";
+import { PasswordResetToken } from "./entities/password-reset-token.entity";
+import { RegisterDto } from "./dto/register.dto";
+import { LoginDto } from "./dto/login.dto";
+import { AuthResponseDto, TokensResponseDto, UserResponseDto, RefreshTokenResponseDto, MessageResponseDto } from "./dto/auth-response.dto";
+import { ForgotPasswordDto, ResetPasswordDto, ChangePasswordDto } from "./dto/password.dto";
+import { JwtPayload } from "./strategies/jwt.strategy";
 
 interface GoogleTokenInfo {
   aud: string;
@@ -41,17 +35,17 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService
   ) {
-    this.accessTokenExpiry = parseInt(this.configService.get('JWT_ACCESS_EXPIRY') || '900'); // 15 min
-    this.refreshTokenExpiry = parseInt(this.configService.get('JWT_REFRESH_EXPIRY') || '604800'); // 7 days
+    this.accessTokenExpiry = parseInt(this.configService.get("JWT_ACCESS_EXPIRY") || "900"); // 15 min
+    this.refreshTokenExpiry = parseInt(this.configService.get("JWT_REFRESH_EXPIRY") || "604800"); // 7 days
   }
 
   async register(dto: RegisterDto, userAgent?: string, ipAddress?: string): Promise<AuthResponseDto> {
     const existing = await this.usersRepository.findOne({ where: { email: dto.email.toLowerCase() } });
-    if (existing) throw new ConflictException('Email already registered');
+    if (existing) throw new ConflictException("Email already registered");
 
     const user = this.usersRepository.create({
       id: uuidv4(),
-      name: dto.name || dto.email.split('@')[0],
+      name: dto.name || dto.email.split("@")[0],
       email: dto.email.toLowerCase(),
       password: await bcrypt.hash(dto.password, 10)
     });
@@ -64,10 +58,10 @@ export class AuthService {
   async login(dto: LoginDto, userAgent?: string, ipAddress?: string): Promise<AuthResponseDto> {
     const user = await this.usersRepository.findOne({
       where: { email: dto.email.toLowerCase() },
-      select: ['id', 'email', 'name', 'password', 'createdAt', 'googlePhotoUrl']
+      select: ["id", "email", "name", "password", "createdAt", "googlePhotoUrl"]
     });
     if (!user || !(await bcrypt.compare(dto.password, user.password))) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const tokens = await this.generateTokens(user, userAgent, ipAddress);
@@ -80,20 +74,20 @@ export class AuthService {
 
     let user = await this.usersRepository.findOne({
       where: { email },
-      select: ['id', 'email', 'name', 'password', 'createdAt', 'googlePhotoUrl']
+      select: ["id", "email", "name", "password", "createdAt", "googlePhotoUrl"]
     });
 
     if (!user) {
       user = this.usersRepository.create({
         id: uuidv4(),
-        name: (googleProfile.name || email.split('@')[0]).trim(),
+        name: (googleProfile.name || email.split("@")[0]).trim(),
         email,
         googlePhotoUrl: googleProfile.picture || null,
         // Keep password field populated for schema compatibility.
-        password: await bcrypt.hash(randomBytes(32).toString('hex'), 10),
+        password: await bcrypt.hash(randomBytes(32).toString("hex"), 10)
       });
     } else {
-      user.name = (googleProfile.name || user.name || email.split('@')[0]).trim();
+      user.name = (googleProfile.name || user.name || email.split("@")[0]).trim();
       user.googlePhotoUrl = googleProfile.picture || user.googlePhotoUrl || null;
     }
 
@@ -106,10 +100,10 @@ export class AuthService {
     const hashedToken = this.hashToken(refreshToken);
     const storedToken = await this.refreshTokenRepository.findOne({
       where: { token: hashedToken, isRevoked: false, expiresAt: MoreThan(new Date()) },
-      relations: ['user']
+      relations: ["user"]
     });
 
-    if (!storedToken) throw new UnauthorizedException('Invalid or expired refresh token');
+    if (!storedToken) throw new UnauthorizedException("Invalid or expired refresh token");
 
     // Revoke old token
     storedToken.isRevoked = true;
@@ -123,25 +117,25 @@ export class AuthService {
   async logout(refreshToken: string): Promise<MessageResponseDto> {
     const hashedToken = this.hashToken(refreshToken);
     await this.refreshTokenRepository.update({ token: hashedToken }, { isRevoked: true });
-    return { message: 'Logged out successfully' };
+    return { message: "Logged out successfully" };
   }
 
   async logoutAll(userId: string): Promise<MessageResponseDto> {
     await this.refreshTokenRepository.update({ userId, isRevoked: false }, { isRevoked: true });
-    return { message: 'All sessions logged out successfully' };
+    return { message: "All sessions logged out successfully" };
   }
 
   async forgotPassword(dto: ForgotPasswordDto): Promise<MessageResponseDto> {
     const user = await this.usersRepository.findOne({ where: { email: dto.email.toLowerCase() } });
-    
+
     // Always return success to prevent email enumeration
-    if (!user) return { message: 'If email exists, reset instructions have been sent' };
+    if (!user) return { message: "If email exists, reset instructions have been sent" };
 
     // Invalidate existing reset tokens
     await this.passwordResetRepository.update({ userId: user.id, isUsed: false }, { isUsed: true });
 
     // Create new reset token (valid for 1 hour)
-    const token = randomBytes(32).toString('hex');
+    const token = randomBytes(32).toString("hex");
     const resetToken = this.passwordResetRepository.create({
       token,
       userId: user.id,
@@ -153,16 +147,16 @@ export class AuthService {
     // Email should contain: `${APP_URL}/reset-password?token=${token}`
     console.log(`Password reset token for ${user.email}: ${token}`);
 
-    return { message: 'If email exists, reset instructions have been sent' };
+    return { message: "If email exists, reset instructions have been sent" };
   }
 
   async resetPassword(dto: ResetPasswordDto): Promise<MessageResponseDto> {
     const resetToken = await this.passwordResetRepository.findOne({
       where: { token: dto.token, isUsed: false, expiresAt: MoreThan(new Date()) },
-      relations: ['user']
+      relations: ["user"]
     });
 
-    if (!resetToken) throw new BadRequestException('Invalid or expired reset token');
+    if (!resetToken) throw new BadRequestException("Invalid or expired reset token");
 
     // Update password
     resetToken.user.password = await bcrypt.hash(dto.newPassword, 10);
@@ -175,24 +169,24 @@ export class AuthService {
     // Revoke all refresh tokens for security
     await this.refreshTokenRepository.update({ userId: resetToken.userId }, { isRevoked: true });
 
-    return { message: 'Password reset successfully' };
+    return { message: "Password reset successfully" };
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto): Promise<MessageResponseDto> {
     const user = await this.usersRepository.findOne({
       where: { id: userId },
-      select: ['id', 'password']
+      select: ["id", "password"]
     });
 
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) throw new NotFoundException("User not found");
 
     const isValid = await bcrypt.compare(dto.currentPassword, user.password);
-    if (!isValid) throw new UnauthorizedException('Current password is incorrect');
+    if (!isValid) throw new UnauthorizedException("Current password is incorrect");
 
     user.password = await bcrypt.hash(dto.newPassword, 10);
     await this.usersRepository.save(user);
 
-    return { message: 'Password changed successfully' };
+    return { message: "Password changed successfully" };
   }
 
   async getProfile(user: User): Promise<{ user: UserResponseDto }> {
@@ -201,9 +195,9 @@ export class AuthService {
 
   private async generateTokens(user: User, userAgent?: string, ipAddress?: string): Promise<TokensResponseDto> {
     const payload: JwtPayload = { sub: user.id, email: user.email };
-    
+
     const accessToken = this.jwtService.sign(payload, { expiresIn: this.accessTokenExpiry });
-    const refreshToken = randomBytes(64).toString('hex');
+    const refreshToken = randomBytes(64).toString("hex");
 
     // Store hashed refresh token
     const hashedToken = this.hashToken(refreshToken);
@@ -227,40 +221,35 @@ export class AuthService {
   }
 
   private hashToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
+    return createHash("sha256").update(token).digest("hex");
   }
 
   private async verifyGoogleIdToken(idToken: string): Promise<GoogleTokenInfo> {
-    const response = await fetch(
-      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
-    );
+    const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
     if (!response.ok) {
-      throw new UnauthorizedException('Invalid Google token');
+      throw new UnauthorizedException("Invalid Google token");
     }
 
     const tokenInfo = (await response.json()) as Partial<GoogleTokenInfo>;
-    if (!tokenInfo.email || !tokenInfo.aud || tokenInfo.email_verified !== 'true') {
-      throw new UnauthorizedException('Google token missing required claims');
+    if (!tokenInfo.email || !tokenInfo.aud || tokenInfo.email_verified !== "true") {
+      throw new UnauthorizedException("Google token missing required claims");
     }
 
-    const allowedAudienceEnv =
-      this.configService.get<string>('GOOGLE_CLIENT_IDS') ||
-      this.configService.get<string>('GOOGLE_CLIENT_ID') ||
-      '';
+    const allowedAudienceEnv = this.configService.get<string>("GOOGLE_CLIENT_IDS") || this.configService.get<string>("GOOGLE_CLIENT_ID") || "";
     const allowedAudiences = allowedAudienceEnv
-      .split(',')
+      .split(",")
       .map((v) => v.trim())
       .filter(Boolean);
 
     if (allowedAudiences.length > 0 && !allowedAudiences.includes(tokenInfo.aud)) {
-      throw new UnauthorizedException('Google token audience mismatch');
+      throw new UnauthorizedException("Google token audience mismatch");
     }
 
     return tokenInfo as GoogleTokenInfo;
   }
 
   private toUserResponse(user: User): UserResponseDto {
-    const appUrl = this.configService.get<string>('APP_URL') || '';
+    const appUrl = this.configService.get<string>("APP_URL") || "";
     const avatarFromFile = user.avatar?.path ? `${appUrl}/${user.avatar.path}` : null;
     return {
       id: user.id,

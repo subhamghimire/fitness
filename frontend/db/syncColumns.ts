@@ -6,7 +6,7 @@ export function newSyncDefaults(userId: string | null = null): {
   user_id: string | null;
   created_at: string;
   updated_at: string;
-  local_updated_at: string;
+  client_updated_at: string;
   server_updated_at: string | null;
   deleted_at: string | null;
   sync_status: SyncStatus;
@@ -18,7 +18,7 @@ export function newSyncDefaults(userId: string | null = null): {
     user_id: userId,
     created_at: now,
     updated_at: now,
-    local_updated_at: now,
+    client_updated_at: now,
     server_updated_at: null,
     deleted_at: null,
     sync_status: 'pending',
@@ -29,14 +29,14 @@ export function newSyncDefaults(userId: string | null = null): {
 
 export function touchPending(revision: number): {
   updated_at: string;
-  local_updated_at: string;
+  client_updated_at: string;
   sync_status: SyncStatus;
   revision: number;
 } {
   const now = getCurrentISOString();
   return {
     updated_at: now,
-    local_updated_at: now,
+    client_updated_at: now,
     sync_status: 'pending',
     revision: revision + 1,
   };
@@ -46,7 +46,7 @@ export const SYNC_COLUMN_NAMES = [
   'user_id',
   'created_at',
   'updated_at',
-  'local_updated_at',
+  'client_updated_at',
   'server_updated_at',
   'deleted_at',
   'sync_status',

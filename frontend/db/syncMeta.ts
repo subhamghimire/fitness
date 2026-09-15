@@ -7,7 +7,7 @@ const META_KEY = 'default';
 export async function getSyncMeta(): Promise<SyncMeta> {
   const row = await getDatabase().getFirstAsync<{
     key: string;
-    last_sync_token: string | null;
+    last_sync_revision: number | null;
     last_successful_sync_at: string | null;
     last_attempted_sync_at: string | null;
     last_error: string | null;
@@ -17,13 +17,13 @@ export async function getSyncMeta(): Promise<SyncMeta> {
   if (!row) {
     const clientId = generateId();
     await getDatabase().runAsync(
-      `INSERT INTO sync_meta (key, last_sync_token, last_successful_sync_at, last_attempted_sync_at, last_error, client_id)
-       VALUES (?, NULL, NULL, NULL, NULL, ?)`,
+      `INSERT INTO sync_meta (key, last_sync_revision, last_successful_sync_at, last_attempted_sync_at, last_error, client_id)
+       VALUES (?, 0, NULL, NULL, NULL, ?)`,
       [META_KEY, clientId]
     );
     return {
       key: META_KEY,
-      lastSyncToken: null,
+      lastSyncRevision: 0,
       lastSuccessfulSyncAt: null,
       lastAttemptedSyncAt: null,
       lastError: null,
@@ -33,7 +33,7 @@ export async function getSyncMeta(): Promise<SyncMeta> {
 
   return {
     key: row.key,
-    lastSyncToken: row.last_sync_token,
+    lastSyncRevision: row.last_sync_revision ?? 0,
     lastSuccessfulSyncAt: row.last_successful_sync_at,
     lastAttemptedSyncAt: row.last_attempted_sync_at,
     lastError: row.last_error,
@@ -42,7 +42,7 @@ export async function getSyncMeta(): Promise<SyncMeta> {
 }
 
 export async function updateSyncMeta(patch: Partial<{
-  lastSyncToken: string | null;
+  lastSyncRevision: number | null;
   lastSuccessfulSyncAt: string | null;
   lastAttemptedSyncAt: string | null;
   lastError: string | null;
@@ -50,10 +50,10 @@ export async function updateSyncMeta(patch: Partial<{
 }>): Promise<void> {
   await getSyncMeta();
   const fields: string[] = [];
-  const values: (string | null)[] = [];
-  if (patch.lastSyncToken !== undefined) {
-    fields.push('last_sync_token = ?');
-    values.push(patch.lastSyncToken);
+  const values: (string | number | null)[] = [];
+  if (patch.lastSyncRevision !== undefined) {
+    fields.push('last_sync_revision = ?');
+    values.push(patch.lastSyncRevision);
   }
   if (patch.lastSuccessfulSyncAt !== undefined) {
     fields.push('last_successful_sync_at = ?');

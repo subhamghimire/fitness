@@ -2,11 +2,11 @@ import { resolveLww, shouldSyncNow, shouldApplyServerChange, ONE_DAY_MS, SIX_HOU
 import { isDirtyRow } from '../../db/syncColumns';
 
 describe('resolveLww', () => {
-  it('prefers newer localUpdatedAt', () => {
+  it('prefers newer clientUpdatedAt', () => {
     expect(
       resolveLww({
-        clientLocalUpdatedAt: '2026-01-02T00:00:00.000Z',
-        serverUpdatedAt: '2026-01-01T00:00:00.000Z',
+        localClientUpdatedAt: '2026-01-02T00:00:00.000Z',
+        serverClientUpdatedAt: '2026-01-01T00:00:00.000Z',
         clientRevision: 1,
         serverRevision: 9,
       })
@@ -16,8 +16,8 @@ describe('resolveLww', () => {
   it('prefers delete when delete is newer or equal', () => {
     expect(
       resolveLww({
-        clientLocalUpdatedAt: '2026-01-02T00:00:00.000Z',
-        serverUpdatedAt: '2026-01-01T00:00:00.000Z',
+        localClientUpdatedAt: '2026-01-02T00:00:00.000Z',
+        serverClientUpdatedAt: '2026-01-01T00:00:00.000Z',
         clientRevision: 1,
         serverRevision: 1,
         clientDeleted: true,
@@ -32,9 +32,9 @@ describe('shouldApplyServerChange', () => {
       shouldApplyServerChange({
         localRevision: 2,
         localSyncedRevision: 2,
-        localUpdatedAt: '2026-01-02T00:00:00.000Z',
+        localClientUpdatedAt: '2026-01-02T00:00:00.000Z',
         serverRevision: 1,
-        serverUpdatedAt: '2026-01-01T00:00:00.000Z',
+        serverClientUpdatedAt: '2026-01-01T00:00:00.000Z',
         localPending: false,
       })
     ).toBe(true);
@@ -45,9 +45,9 @@ describe('shouldApplyServerChange', () => {
       shouldApplyServerChange({
         localRevision: 5,
         localSyncedRevision: 4,
-        localUpdatedAt: '2026-01-03T00:00:00.000Z',
+        localClientUpdatedAt: '2026-01-03T00:00:00.000Z',
         serverRevision: 4,
-        serverUpdatedAt: '2026-01-02T00:00:00.000Z',
+        serverClientUpdatedAt: '2026-01-02T00:00:00.000Z',
         localPending: true,
       })
     ).toBe(false);
@@ -180,8 +180,8 @@ describe('offline workout invariants', () => {
     expect(history).toHaveLength(500);
   });
 
-  it('first-time device sync uses null token', () => {
-    const lastSyncToken: string | null = null;
-    expect(lastSyncToken).toBeNull();
+  it('first-time device sync uses revision 0/null cursor', () => {
+    const lastSyncRevision: number | null = null;
+    expect(lastSyncRevision).toBeNull();
   });
 });

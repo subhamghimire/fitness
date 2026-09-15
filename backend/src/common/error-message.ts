@@ -7,5 +7,5 @@ export const ERROR_MESSAGE_CONFIG = {
   UNPROCESSABLE_ENTITY: "Unprocessable entity",
   CONFLICT: "Conflict",
   TOO_MANY_REQUESTS: "Too many requests",
-  SERVICE_UNAVAILABLE: "Service unavailable",
+  SERVICE_UNAVAILABLE: "Service unavailable"
 };

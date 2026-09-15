@@ -1,15 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { CoachDocument } from './entities/coach-document.entity';
-import { createPaginatedResponse } from 'src/common/dto';
-import {
-  CreateCoachDocumentDto,
-  UpdateCoachDocumentDto,
-  CoachDocumentQueryDto,
-  PaginatedCoachDocumentResponseDto,
-  CoachDocumentResponseDto
-} from './dto';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { CoachDocument } from "./entities/coach-document.entity";
+import { createPaginatedResponse } from "src/common/dto";
+import { CreateCoachDocumentDto, UpdateCoachDocumentDto, CoachDocumentQueryDto, PaginatedCoachDocumentResponseDto, CoachDocumentResponseDto } from "./dto";
 
 @Injectable()
 export class CoachDocumentService {
@@ -25,18 +19,23 @@ export class CoachDocumentService {
   }
 
   async findAll(query: CoachDocumentQueryDto): Promise<PaginatedCoachDocumentResponseDto> {
-    const { coachId, status, page = 1, limit = 20, sortOrder = 'DESC' } = query;
-    const qb = this.repository.createQueryBuilder('doc');
+    const { coachId, status, page = 1, limit = 20, sortOrder = "DESC" } = query;
+    const qb = this.repository.createQueryBuilder("doc");
 
-    if (coachId) qb.andWhere('doc.coachId = :coachId', { coachId });
-    if (status) qb.andWhere('doc.status = :status', { status });
+    if (coachId) qb.andWhere("doc.coachId = :coachId", { coachId });
+    if (status) qb.andWhere("doc.status = :status", { status });
 
-    qb.orderBy('doc.createdAt', sortOrder === 'ASC' ? 'ASC' : 'DESC');
+    qb.orderBy("doc.createdAt", sortOrder === "ASC" ? "ASC" : "DESC");
     const total = await qb.getCount();
     qb.skip((page - 1) * limit).take(limit);
     const docs = await qb.getMany();
 
-    return createPaginatedResponse(docs.map(d => this.toResponseDto(d)), total, page, limit);
+    return createPaginatedResponse(
+      docs.map((d) => this.toResponseDto(d)),
+      total,
+      page,
+      limit
+    );
   }
 
   async findOne(id: string): Promise<CoachDocumentResponseDto> {
@@ -57,7 +56,7 @@ export class CoachDocumentService {
     const doc = await this.repository.findOne({ where: { id } });
     if (!doc) throw new NotFoundException(`Document not found`);
     await this.repository.remove(doc);
-    return { success: true, message: 'Document deleted' };
+    return { success: true, message: "Document deleted" };
   }
 
   private toResponseDto(doc: CoachDocument): CoachDocumentResponseDto {

@@ -1,16 +1,10 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Coach } from './entities/coach.entity';
-import { User } from '../users/entities/user.entity';
-import { createPaginatedResponse } from 'src/common/dto';
-import {
-  CreateCoachDto,
-  UpdateCoachDto,
-  CoachQueryDto,
-  PaginatedCoachResponseDto,
-  CoachResponseDto
-} from './dto';
+import { Injectable, NotFoundException, ConflictException } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { Coach } from "./entities/coach.entity";
+import { User } from "../users/entities/user.entity";
+import { createPaginatedResponse } from "src/common/dto";
+import { CreateCoachDto, UpdateCoachDto, CoachQueryDto, PaginatedCoachResponseDto, CoachResponseDto } from "./dto";
 
 @Injectable()
 export class CoachService {
@@ -22,14 +16,14 @@ export class CoachService {
   async create(createDto: CreateCoachDto, user: User): Promise<CoachResponseDto> {
     const existingCoach = await this.coachRepository.findOne({ where: { user: { id: user.id } } });
     if (existingCoach) {
-      throw new ConflictException('User is already a coach');
+      throw new ConflictException("User is already a coach");
     }
 
     const coach = this.coachRepository.create({
       ...createDto,
       user
     });
-    
+
     // Default name to user's name if not provided (though dto validation requires it currently)
     // If we make name optional in DTO later, this would be useful:
     // if (!coach.name) coach.name = user.name;
@@ -39,29 +33,24 @@ export class CoachService {
   }
 
   async findAll(query: CoachQueryDto): Promise<PaginatedCoachResponseDto> {
-    const { search, isVerified, page = 1, limit = 20, sortBy = 'rank', sortOrder = 'DESC' } = query;
+    const { search, isVerified, page = 1, limit = 20, sortBy = "rank", sortOrder = "DESC" } = query;
 
-    const queryBuilder = this.coachRepository
-      .createQueryBuilder('coach')
-      .loadRelationCountAndMap('coach.documentCount', 'coach.documents');
+    const queryBuilder = this.coachRepository.createQueryBuilder("coach").loadRelationCountAndMap("coach.documentCount", "coach.documents");
 
     // Apply search filter
     if (search) {
-      queryBuilder.andWhere(
-        '(coach.name ILIKE :search OR coach.bio ILIKE :search)',
-        { search: `%${search}%` }
-      );
+      queryBuilder.andWhere("(coach.name ILIKE :search OR coach.bio ILIKE :search)", { search: `%${search}%` });
     }
 
     // Apply verified filter
     if (isVerified !== undefined) {
-      queryBuilder.andWhere('coach.isVerified = :isVerified', { isVerified });
+      queryBuilder.andWhere("coach.isVerified = :isVerified", { isVerified });
     }
 
     // Apply sorting
-    const validSortColumns = ['name', 'rank', 'createdAt'];
-    const sortColumn = validSortColumns.includes(sortBy) ? sortBy : 'rank';
-    queryBuilder.orderBy(`coach.${sortColumn}`, sortOrder === 'ASC' ? 'ASC' : 'DESC');
+    const validSortColumns = ["name", "rank", "createdAt"];
+    const sortColumn = validSortColumns.includes(sortBy) ? sortBy : "rank";
+    queryBuilder.orderBy(`coach.${sortColumn}`, sortOrder === "ASC" ? "ASC" : "DESC");
 
     // Get total count
     const total = await queryBuilder.getCount();
@@ -73,7 +62,7 @@ export class CoachService {
     const coaches = await queryBuilder.getMany();
 
     return createPaginatedResponse(
-      coaches.map(c => this.toResponseDto(c)),
+      coaches.map((c) => this.toResponseDto(c)),
       total,
       page,
       limit
@@ -81,11 +70,7 @@ export class CoachService {
   }
 
   async findOne(id: string): Promise<CoachResponseDto> {
-    const coach = await this.coachRepository
-      .createQueryBuilder('coach')
-      .loadRelationCountAndMap('coach.documentCount', 'coach.documents')
-      .where('coach.id = :id', { id })
-      .getOne();
+    const coach = await this.coachRepository.createQueryBuilder("coach").loadRelationCountAndMap("coach.documentCount", "coach.documents").where("coach.id = :id", { id }).getOne();
 
     if (!coach) {
       throw new NotFoundException(`Coach with ID "${id}" not found`);
@@ -124,9 +109,9 @@ export class CoachService {
   async getVerifiedCoaches(): Promise<CoachResponseDto[]> {
     const coaches = await this.coachRepository.find({
       where: { isVerified: true },
-      order: { rank: 'DESC' }
+      order: { rank: "DESC" }
     });
-    return coaches.map(c => this.toResponseDto(c));
+    return coaches.map((c) => this.toResponseDto(c));
   }
 
   private toResponseDto(coach: Coach & { documentCount?: number }): CoachResponseDto {

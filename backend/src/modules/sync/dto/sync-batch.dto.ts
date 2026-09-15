@@ -1,15 +1,4 @@
-import {
-  IsString,
-  IsUUID,
-  IsOptional,
-  IsNumber,
-  IsBoolean,
-  IsArray,
-  ValidateNested,
-  IsIn,
-  IsDateString,
-  ValidateIf
-} from "class-validator";
+import { IsUUID, IsOptional, IsNumber, IsArray, ValidateNested, IsIn, IsDateString, ValidateIf, Min, IsInt } from "class-validator";
 import { Type } from "class-transformer";
 
 export class SyncChangeItemDto {
@@ -22,8 +11,9 @@ export class SyncChangeItemDto {
   @IsNumber()
   revision: number;
 
+  /** Logical time of the client mutation – used for conflict resolution. */
   @IsDateString()
-  localUpdatedAt: string;
+  clientUpdatedAt: string;
 
   @IsOptional()
   payload?: Record<string, unknown> | null;
@@ -68,9 +58,11 @@ export class SyncBatchChangesDto {
 }
 
 export class SyncBatchRequestDto {
+  /** Numeric cursor: 0 or null means full initial sync. */
   @ValidateIf((_, v) => v !== null && v !== undefined)
-  @IsString()
-  lastSyncToken?: string | null;
+  @IsInt()
+  @Min(0)
+  lastSyncRevision?: number | null;
 
   @IsUUID()
   clientId: string;
@@ -81,9 +73,4 @@ export class SyncBatchRequestDto {
 }
 
 // Re-export legacy DTO pieces used by old endpoint
-export {
-  SyncWorkoutDto,
-  SyncWorkoutDataDto,
-  SyncExerciseDto,
-  SyncSetDto
-} from "./sync-workout.dto";
+export { SyncWorkoutDto, SyncWorkoutDataDto, SyncExerciseDto, SyncSetDto } from "./sync-workout.dto";

@@ -26,7 +26,7 @@ export async function insertWorkout(w: WorkoutLocal): Promise<void> {
   await db.runAsync(
     `INSERT INTO workouts_local (
       id, status, name, notes, started_at, ended_at, last_synced_at,
-      user_id, created_at, updated_at, local_updated_at, server_updated_at, deleted_at,
+      user_id, created_at, updated_at, client_updated_at, server_updated_at, deleted_at,
       sync_status, revision, last_synced_revision
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -40,7 +40,7 @@ export async function insertWorkout(w: WorkoutLocal): Promise<void> {
       w.user_id ?? sync.user_id,
       w.created_at ?? sync.created_at,
       w.updated_at ?? sync.updated_at,
-      w.local_updated_at ?? sync.local_updated_at,
+      w.client_updated_at ?? sync.client_updated_at,
       w.server_updated_at ?? sync.server_updated_at,
       w.deleted_at ?? sync.deleted_at,
       w.sync_status ?? sync.sync_status,
@@ -99,9 +99,9 @@ export async function updateWorkout(id: string, data: Partial<WorkoutLocal>, bum
     fields.push('revision = ?');
     values.push(data.revision);
   }
-  if (data.local_updated_at !== undefined && !bumpRevision) {
-    fields.push('local_updated_at = ?');
-    values.push(data.local_updated_at);
+  if (data.client_updated_at !== undefined && !bumpRevision) {
+    fields.push('client_updated_at = ?');
+    values.push(data.client_updated_at);
   }
   if (data.updated_at !== undefined && !bumpRevision) {
     fields.push('updated_at = ?');
@@ -110,8 +110,8 @@ export async function updateWorkout(id: string, data: Partial<WorkoutLocal>, bum
 
   if (bumpRevision) {
     const touch = touchPending(current?.revision ?? 0);
-    fields.push('updated_at = ?', 'local_updated_at = ?', 'sync_status = ?', 'revision = ?');
-    values.push(touch.updated_at, touch.local_updated_at, touch.sync_status, touch.revision);
+    fields.push('updated_at = ?', 'client_updated_at = ?', 'sync_status = ?', 'revision = ?');
+    values.push(touch.updated_at, touch.client_updated_at, touch.sync_status, touch.revision);
   }
 
   if (fields.length === 0) return;
@@ -127,8 +127,8 @@ export async function deleteWorkout(id: string): Promise<void> {
   if (!workout) return;
   const touch = touchPending(workout.revision);
   await db.runAsync(
-    `UPDATE workouts_local SET deleted_at = ?, updated_at = ?, local_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
-    [now, touch.updated_at, touch.local_updated_at, touch.sync_status, touch.revision, id]
+    `UPDATE workouts_local SET deleted_at = ?, updated_at = ?, client_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
+    [now, touch.updated_at, touch.client_updated_at, touch.sync_status, touch.revision, id]
   );
 
   const exercises = await db.getAllAsync<{ id: string; revision: number }>(
@@ -206,7 +206,7 @@ export async function insertExercise(e: ExerciseLocal): Promise<void> {
   await getDatabase().runAsync(
     `INSERT INTO exercises_local (
       id, workout_id, name, order_index, notes, rest_seconds,
-      user_id, created_at, updated_at, local_updated_at, server_updated_at, deleted_at,
+      user_id, created_at, updated_at, client_updated_at, server_updated_at, deleted_at,
       sync_status, revision, last_synced_revision
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -219,7 +219,7 @@ export async function insertExercise(e: ExerciseLocal): Promise<void> {
       e.user_id ?? sync.user_id,
       e.created_at ?? sync.created_at,
       e.updated_at ?? sync.updated_at,
-      e.local_updated_at ?? sync.local_updated_at,
+      e.client_updated_at ?? sync.client_updated_at,
       e.server_updated_at ?? sync.server_updated_at,
       e.deleted_at ?? sync.deleted_at,
       e.sync_status ?? sync.sync_status,
@@ -234,8 +234,8 @@ export async function updateExercise(id: string, name: string, notes?: string | 
   const current = await db.getFirstAsync<{ revision: number }>(`SELECT revision FROM exercises_local WHERE id = ?`, [id]);
   const touch = touchPending(current?.revision ?? 0);
   await db.runAsync(
-    `UPDATE exercises_local SET name = ?, notes = COALESCE(?, notes), updated_at = ?, local_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
-    [name, notes ?? null, touch.updated_at, touch.local_updated_at, touch.sync_status, touch.revision, id]
+    `UPDATE exercises_local SET name = ?, notes = COALESCE(?, notes), updated_at = ?, client_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
+    [name, notes ?? null, touch.updated_at, touch.client_updated_at, touch.sync_status, touch.revision, id]
   );
 }
 
@@ -245,8 +245,8 @@ async function softDeleteExercise(id: string, deletedAt: string): Promise<void> 
   if (!current) return;
   const touch = touchPending(current.revision);
   await db.runAsync(
-    `UPDATE exercises_local SET deleted_at = ?, updated_at = ?, local_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
-    [deletedAt, touch.updated_at, touch.local_updated_at, touch.sync_status, touch.revision, id]
+    `UPDATE exercises_local SET deleted_at = ?, updated_at = ?, client_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
+    [deletedAt, touch.updated_at, touch.client_updated_at, touch.sync_status, touch.revision, id]
   );
   const sets = await db.getAllAsync<{ id: string; revision: number }>(
     `SELECT id, revision FROM sets_local WHERE exercise_id = ? AND deleted_at IS NULL`,
@@ -274,7 +274,7 @@ export async function insertSet(s: SetLocal): Promise<void> {
   await getDatabase().runAsync(
     `INSERT INTO sets_local (
       id, exercise_id, order_index, weight, reps, is_warmup, is_dropset, is_failure, is_completed,
-      user_id, created_at, updated_at, local_updated_at, server_updated_at, deleted_at,
+      user_id, created_at, updated_at, client_updated_at, server_updated_at, deleted_at,
       sync_status, revision, last_synced_revision
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -290,7 +290,7 @@ export async function insertSet(s: SetLocal): Promise<void> {
       s.user_id ?? sync.user_id,
       s.created_at ?? sync.created_at,
       s.updated_at ?? sync.updated_at,
-      s.local_updated_at ?? sync.local_updated_at,
+      s.client_updated_at ?? sync.client_updated_at,
       s.server_updated_at ?? sync.server_updated_at,
       s.deleted_at ?? sync.deleted_at,
       s.sync_status ?? sync.sync_status,
@@ -334,8 +334,8 @@ export async function updateSet(id: string, data: Partial<SetLocal>): Promise<vo
     values.push(data.is_completed);
   }
   const touch = touchPending(current?.revision ?? 0);
-  fields.push('updated_at = ?', 'local_updated_at = ?', 'sync_status = ?', 'revision = ?');
-  values.push(touch.updated_at, touch.local_updated_at, touch.sync_status, touch.revision);
+  fields.push('updated_at = ?', 'client_updated_at = ?', 'sync_status = ?', 'revision = ?');
+  values.push(touch.updated_at, touch.client_updated_at, touch.sync_status, touch.revision);
   if (fields.length === 0) return;
   values.push(id);
   await db.runAsync(`UPDATE sets_local SET ${fields.join(', ')} WHERE id = ?`, values);
@@ -347,8 +347,8 @@ async function softDeleteSet(id: string, deletedAt: string): Promise<void> {
   if (!current) return;
   const touch = touchPending(current.revision);
   await db.runAsync(
-    `UPDATE sets_local SET deleted_at = ?, updated_at = ?, local_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
-    [deletedAt, touch.updated_at, touch.local_updated_at, touch.sync_status, touch.revision, id]
+    `UPDATE sets_local SET deleted_at = ?, updated_at = ?, client_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
+    [deletedAt, touch.updated_at, touch.client_updated_at, touch.sync_status, touch.revision, id]
   );
 }
 
@@ -457,8 +457,8 @@ export async function updateExerciseRestSeconds(id: string, restSeconds: number)
   const current = await db.getFirstAsync<{ revision: number }>(`SELECT revision FROM exercises_local WHERE id = ?`, [id]);
   const touch = touchPending(current?.revision ?? 0);
   await db.runAsync(
-    `UPDATE exercises_local SET rest_seconds = ?, updated_at = ?, local_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
-    [restSeconds, touch.updated_at, touch.local_updated_at, touch.sync_status, touch.revision, id]
+    `UPDATE exercises_local SET rest_seconds = ?, updated_at = ?, client_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
+    [restSeconds, touch.updated_at, touch.client_updated_at, touch.sync_status, touch.revision, id]
   );
 }
 

@@ -1,6 +1,6 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PaginatedResponseDto, PaginationMeta } from 'src/common/dto';
-import { CoachDocumentStatus } from '../enums';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { PaginatedResponseDto, PaginationMeta } from "src/common/dto";
+import { CoachDocumentStatus } from "../enums";
 
 export class CoachDocumentResponseDto {
   @ApiProperty()

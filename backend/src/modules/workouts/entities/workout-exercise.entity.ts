@@ -30,6 +30,10 @@ export class WorkoutExercise extends AbstractEntity {
   @Column({ type: "int", default: 1 })
   revision: number;
 
+  /** Logical time of the last client mutation; used for conflict resolution. */
+  @Column({ name: "client_updated_at", type: "timestamptz", nullable: true })
+  clientUpdatedAt: Date | null;
+
   @ManyToOne(() => Workout, (w) => w.workoutExercises, { onDelete: "CASCADE" })
   @JoinColumn({ name: "workout_id" })
   workout: Workout;

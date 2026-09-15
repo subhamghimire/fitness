@@ -32,6 +32,10 @@ export class UserTemplateSet extends AbstractEntity {
   @Column({ type: "int", default: 1 })
   revision: number;
 
+  /** Logical time of the last client mutation; used for conflict resolution. */
+  @Column({ name: "client_updated_at", type: "timestamptz", nullable: true })
+  clientUpdatedAt: Date | null;
+
   @ManyToOne(() => UserTemplateExercise, (e) => e.sets, { onDelete: "CASCADE" })
   @JoinColumn({ name: "template_exercise_id" })
   templateExercise: UserTemplateExercise;

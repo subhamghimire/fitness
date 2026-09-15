@@ -9,22 +9,27 @@ async function getLocalRow(
 ): Promise<{
   revision: number;
   last_synced_revision: number | null;
-  local_updated_at: string;
+  client_updated_at: string;
   sync_status: string;
 } | null> {
   return getDatabase().getFirstAsync(
-    `SELECT revision, last_synced_revision, local_updated_at, sync_status FROM ${table} WHERE id = ?`,
+    `SELECT revision, last_synced_revision, client_updated_at, sync_status FROM ${table} WHERE id = ?`,
     [id]
   );
 }
 
+/**
+ * @param serverClientUpdatedAt  The server entity's clientUpdatedAt (logical clock).
+ * @param serverUpdatedAt        The server entity's physical updatedAt (server_updated_at / updated_at).
+ */
 async function applyOne(
   table: string,
   item: SyncChangeItem,
-  upsert: (payload: Record<string, unknown>, serverUpdatedAt: string) => Promise<void>
+  upsert: (payload: Record<string, unknown>, serverClientUpdatedAt: string, serverUpdatedAt: string) => Promise<void>
 ): Promise<void> {
   const local = await getLocalRow(table, item.id);
-  const serverUpdatedAt = (item.payload?.serverUpdatedAt as string) || item.localUpdatedAt;
+  const serverClientUpdatedAt = item.clientUpdatedAt;
+  const serverUpdatedAt = (item.payload?.serverUpdatedAt as string) || serverClientUpdatedAt;
 
   if (local) {
     const pending =
@@ -35,9 +40,9 @@ async function applyOne(
     const apply = shouldApplyServerChange({
       localRevision: local.revision,
       localSyncedRevision: local.last_synced_revision,
-      localUpdatedAt: local.local_updated_at,
+      localClientUpdatedAt: local.client_updated_at,
       serverRevision: item.revision,
-      serverUpdatedAt,
+      serverClientUpdatedAt,
       localPending: pending,
     });
     if (!apply) return;
@@ -46,27 +51,27 @@ async function applyOne(
   if (item.op === 'delete') {
     await getDatabase().runAsync(
       `UPDATE ${table} SET deleted_at = ?, sync_status = 'synced', last_synced_revision = ?, server_updated_at = ?, revision = ? WHERE id = ?`,
-      [item.localUpdatedAt, item.revision, serverUpdatedAt, item.revision, item.id]
+      [serverClientUpdatedAt, item.revision, serverUpdatedAt, item.revision, item.id]
     );
     return;
   }
 
   if (!item.payload) return;
-  await upsert(item.payload, serverUpdatedAt);
+  await upsert(item.payload, serverClientUpdatedAt, serverUpdatedAt);
 }
 
 export async function applyServerChanges(changes: SyncBatchChanges): Promise<void> {
   const db = getDatabase();
 
   for (const item of changes.workouts || []) {
-    await applyOne('workouts_local', item, async (p, serverUpdatedAt) => {
+    await applyOne('workouts_local', item, async (p, serverClientUpdatedAt, serverUpdatedAt) => {
       const existing = await db.getFirstAsync(`SELECT id FROM workouts_local WHERE id = ?`, [item.id]);
       const sync = newSyncDefaults();
       if (existing) {
         await db.runAsync(
           `UPDATE workouts_local SET
             status = 'completed', name = ?, notes = ?, started_at = ?, ended_at = ?,
-            updated_at = ?, local_updated_at = ?, server_updated_at = ?, deleted_at = NULL,
+            updated_at = ?, client_updated_at = ?, server_updated_at = ?, deleted_at = NULL,
             sync_status = 'synced', revision = ?, last_synced_revision = ?, last_synced_at = ?
            WHERE id = ?`,
           [
@@ -75,7 +80,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
             p.startedAt as string,
             (p.endedAt as string) ?? null,
             serverUpdatedAt,
-            serverUpdatedAt,
+            serverClientUpdatedAt,
             serverUpdatedAt,
             item.revision,
             item.revision,
@@ -87,7 +92,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
         await db.runAsync(
           `INSERT INTO workouts_local (
             id, status, name, notes, started_at, ended_at, last_synced_at,
-            user_id, created_at, updated_at, local_updated_at, server_updated_at, deleted_at,
+            user_id, created_at, updated_at, client_updated_at, server_updated_at, deleted_at,
             sync_status, revision, last_synced_revision
           ) VALUES (?, 'completed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?, ?)`,
           [
@@ -100,7 +105,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
             sync.user_id,
             (p.startedAt as string) || sync.created_at,
             serverUpdatedAt,
-            serverUpdatedAt,
+            serverClientUpdatedAt,
             serverUpdatedAt,
             item.revision,
             item.revision,
@@ -111,14 +116,14 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
   }
 
   for (const item of changes.workoutExercises || []) {
-    await applyOne('exercises_local', item, async (p, serverUpdatedAt) => {
+    await applyOne('exercises_local', item, async (p, serverClientUpdatedAt, serverUpdatedAt) => {
       const existing = await db.getFirstAsync(`SELECT id FROM exercises_local WHERE id = ?`, [item.id]);
       const sync = newSyncDefaults();
       if (existing) {
         await db.runAsync(
           `UPDATE exercises_local SET
             workout_id = ?, name = ?, order_index = ?, notes = ?, rest_seconds = ?,
-            updated_at = ?, local_updated_at = ?, server_updated_at = ?, deleted_at = NULL,
+            updated_at = ?, client_updated_at = ?, server_updated_at = ?, deleted_at = NULL,
             sync_status = 'synced', revision = ?, last_synced_revision = ?
            WHERE id = ?`,
           [
@@ -128,7 +133,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
             (p.notes as string) ?? null,
             (p.restSeconds as number) ?? null,
             serverUpdatedAt,
-            serverUpdatedAt,
+            serverClientUpdatedAt,
             serverUpdatedAt,
             item.revision,
             item.revision,
@@ -139,7 +144,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
         await db.runAsync(
           `INSERT INTO exercises_local (
             id, workout_id, name, order_index, notes, rest_seconds,
-            user_id, created_at, updated_at, local_updated_at, server_updated_at, deleted_at,
+            user_id, created_at, updated_at, client_updated_at, server_updated_at, deleted_at,
             sync_status, revision, last_synced_revision
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?, ?)`,
           [
@@ -152,7 +157,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
             sync.user_id,
             sync.created_at,
             serverUpdatedAt,
-            serverUpdatedAt,
+            serverClientUpdatedAt,
             serverUpdatedAt,
             item.revision,
             item.revision,
@@ -163,7 +168,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
   }
 
   for (const item of changes.sets || []) {
-    await applyOne('sets_local', item, async (p, serverUpdatedAt) => {
+    await applyOne('sets_local', item, async (p, serverClientUpdatedAt, serverUpdatedAt) => {
       const existing = await db.getFirstAsync(`SELECT id FROM sets_local WHERE id = ?`, [item.id]);
       const sync = newSyncDefaults();
       const flags = [
@@ -176,7 +181,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
           `UPDATE sets_local SET
             exercise_id = ?, order_index = ?, weight = ?, reps = ?,
             is_warmup = ?, is_dropset = ?, is_failure = ?,
-            updated_at = ?, local_updated_at = ?, server_updated_at = ?, deleted_at = NULL,
+            updated_at = ?, client_updated_at = ?, server_updated_at = ?, deleted_at = NULL,
             sync_status = 'synced', revision = ?, last_synced_revision = ?
            WHERE id = ?`,
           [
@@ -186,7 +191,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
             (p.reps as number) ?? null,
             ...flags,
             serverUpdatedAt,
-            serverUpdatedAt,
+            serverClientUpdatedAt,
             serverUpdatedAt,
             item.revision,
             item.revision,
@@ -197,7 +202,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
         await db.runAsync(
           `INSERT INTO sets_local (
             id, exercise_id, order_index, weight, reps, is_warmup, is_dropset, is_failure, is_completed,
-            user_id, created_at, updated_at, local_updated_at, server_updated_at, deleted_at,
+            user_id, created_at, updated_at, client_updated_at, server_updated_at, deleted_at,
             sync_status, revision, last_synced_revision
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, NULL, 'synced', ?, ?)`,
           [
@@ -210,7 +215,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
             sync.user_id,
             sync.created_at,
             serverUpdatedAt,
-            serverUpdatedAt,
+            serverClientUpdatedAt,
             serverUpdatedAt,
             item.revision,
             item.revision,
@@ -221,19 +226,19 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
   }
 
   for (const item of changes.templates || []) {
-    await applyOne('templates_local', item, async (p, serverUpdatedAt) => {
+    await applyOne('templates_local', item, async (p, serverClientUpdatedAt, serverUpdatedAt) => {
       const existing = await db.getFirstAsync(`SELECT id FROM templates_local WHERE id = ?`, [item.id]);
       const sync = newSyncDefaults();
       if (existing) {
         await db.runAsync(
           `UPDATE templates_local SET
-            name = ?, updated_at = ?, local_updated_at = ?, server_updated_at = ?, deleted_at = NULL,
+            name = ?, updated_at = ?, client_updated_at = ?, server_updated_at = ?, deleted_at = NULL,
             sync_status = 'synced', revision = ?, last_synced_revision = ?
            WHERE id = ?`,
           [
             (p.name as string) || 'Template',
             serverUpdatedAt,
-            serverUpdatedAt,
+            serverClientUpdatedAt,
             serverUpdatedAt,
             item.revision,
             item.revision,
@@ -243,7 +248,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
       } else {
         await db.runAsync(
           `INSERT INTO templates_local (
-            id, name, created_at, user_id, updated_at, local_updated_at, server_updated_at, deleted_at,
+            id, name, created_at, user_id, updated_at, client_updated_at, server_updated_at, deleted_at,
             sync_status, revision, last_synced_revision
           ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?, ?)`,
           [
@@ -252,7 +257,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
             (p.createdAt as string) || sync.created_at,
             sync.user_id,
             serverUpdatedAt,
-            serverUpdatedAt,
+            serverClientUpdatedAt,
             serverUpdatedAt,
             item.revision,
             item.revision,
@@ -263,14 +268,14 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
   }
 
   for (const item of changes.templateExercises || []) {
-    await applyOne('template_exercises_local', item, async (p, serverUpdatedAt) => {
+    await applyOne('template_exercises_local', item, async (p, serverClientUpdatedAt, serverUpdatedAt) => {
       const existing = await db.getFirstAsync(`SELECT id FROM template_exercises_local WHERE id = ?`, [item.id]);
       const sync = newSyncDefaults();
       if (existing) {
         await db.runAsync(
           `UPDATE template_exercises_local SET
             template_id = ?, name = ?, order_index = ?,
-            updated_at = ?, local_updated_at = ?, server_updated_at = ?, deleted_at = NULL,
+            updated_at = ?, client_updated_at = ?, server_updated_at = ?, deleted_at = NULL,
             sync_status = 'synced', revision = ?, last_synced_revision = ?
            WHERE id = ?`,
           [
@@ -278,7 +283,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
             (p.name as string) || 'Exercise',
             (p.orderIndex as number) ?? 0,
             serverUpdatedAt,
-            serverUpdatedAt,
+            serverClientUpdatedAt,
             serverUpdatedAt,
             item.revision,
             item.revision,
@@ -289,7 +294,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
         await db.runAsync(
           `INSERT INTO template_exercises_local (
             id, template_id, name, order_index,
-            user_id, created_at, updated_at, local_updated_at, server_updated_at, deleted_at,
+            user_id, created_at, updated_at, client_updated_at, server_updated_at, deleted_at,
             sync_status, revision, last_synced_revision
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?, ?)`,
           [
@@ -300,7 +305,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
             sync.user_id,
             sync.created_at,
             serverUpdatedAt,
-            serverUpdatedAt,
+            serverClientUpdatedAt,
             serverUpdatedAt,
             item.revision,
             item.revision,
@@ -311,7 +316,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
   }
 
   for (const item of changes.templateSets || []) {
-    await applyOne('template_sets_local', item, async (p, serverUpdatedAt) => {
+    await applyOne('template_sets_local', item, async (p, serverClientUpdatedAt, serverUpdatedAt) => {
       const existing = await db.getFirstAsync(`SELECT id FROM template_sets_local WHERE id = ?`, [item.id]);
       const sync = newSyncDefaults();
       const flags = [p.isWarmup ? 1 : 0, p.isDropset ? 1 : 0, p.isFailure ? 1 : 0];
@@ -320,7 +325,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
           `UPDATE template_sets_local SET
             template_exercise_id = ?, order_index = ?, weight = ?, reps = ?,
             is_warmup = ?, is_dropset = ?, is_failure = ?,
-            updated_at = ?, local_updated_at = ?, server_updated_at = ?, deleted_at = NULL,
+            updated_at = ?, client_updated_at = ?, server_updated_at = ?, deleted_at = NULL,
             sync_status = 'synced', revision = ?, last_synced_revision = ?
            WHERE id = ?`,
           [
@@ -330,7 +335,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
             (p.reps as number) ?? null,
             ...flags,
             serverUpdatedAt,
-            serverUpdatedAt,
+            serverClientUpdatedAt,
             serverUpdatedAt,
             item.revision,
             item.revision,
@@ -341,7 +346,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
         await db.runAsync(
           `INSERT INTO template_sets_local (
             id, template_exercise_id, order_index, weight, reps, is_warmup, is_dropset, is_failure,
-            user_id, created_at, updated_at, local_updated_at, server_updated_at, deleted_at,
+            user_id, created_at, updated_at, client_updated_at, server_updated_at, deleted_at,
             sync_status, revision, last_synced_revision
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?, ?)`,
           [
@@ -354,7 +359,7 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
             sync.user_id,
             sync.created_at,
             serverUpdatedAt,
-            serverUpdatedAt,
+            serverClientUpdatedAt,
             serverUpdatedAt,
             item.revision,
             item.revision,

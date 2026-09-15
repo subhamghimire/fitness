@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PaginatedResponseDto, PaginationMeta } from 'src/common/dto';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { PaginatedResponseDto, PaginationMeta } from "src/common/dto";
 
 export class CoachRatingResponseDto {
   @ApiProperty()
@@ -39,6 +39,6 @@ export class CoachRatingStatsDto {
   @ApiProperty()
   totalRatings: number;
 
-  @ApiProperty({ type: 'object', additionalProperties: { type: 'number' } })
+  @ApiProperty({ type: "object", additionalProperties: { type: "number" } })
   distribution: Record<number, number>;
 }

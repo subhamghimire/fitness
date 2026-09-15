@@ -1,10 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { CoachTemplate } from './entities/coach-template.entity';
-import { DiscountType } from './enums/coach-template.enum';
-import { createPaginatedResponse } from 'src/common/dto';
-import { CreateCoachTemplateDto, UpdateCoachTemplateDto, CoachTemplateQueryDto, PaginatedCoachTemplateResponseDto, CoachTemplateResponseDto } from './dto';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { CoachTemplate } from "./entities/coach-template.entity";
+import { DiscountType } from "./enums/coach-template.enum";
+import { createPaginatedResponse } from "src/common/dto";
+import { CreateCoachTemplateDto, UpdateCoachTemplateDto, CoachTemplateQueryDto, PaginatedCoachTemplateResponseDto, CoachTemplateResponseDto } from "./dto";
 
 @Injectable()
 export class CoachTemplateService {
@@ -20,30 +20,35 @@ export class CoachTemplateService {
   }
 
   async findAll(query: CoachTemplateQueryDto): Promise<PaginatedCoachTemplateResponseDto> {
-    const { coachId, type, maxPrice, page = 1, limit = 20, sortOrder = 'DESC' } = query;
-    const qb = this.repository.createQueryBuilder('template');
+    const { coachId, type, maxPrice, page = 1, limit = 20, sortOrder = "DESC" } = query;
+    const qb = this.repository.createQueryBuilder("template");
 
-    if (coachId) qb.andWhere('template.coachId = :coachId', { coachId });
-    if (type) qb.andWhere('template.type = :type', { type });
-    if (maxPrice !== undefined) qb.andWhere('template.price <= :maxPrice', { maxPrice });
+    if (coachId) qb.andWhere("template.coachId = :coachId", { coachId });
+    if (type) qb.andWhere("template.type = :type", { type });
+    if (maxPrice !== undefined) qb.andWhere("template.price <= :maxPrice", { maxPrice });
 
-    qb.orderBy('template.createdAt', sortOrder === 'ASC' ? 'ASC' : 'DESC');
+    qb.orderBy("template.createdAt", sortOrder === "ASC" ? "ASC" : "DESC");
     const total = await qb.getCount();
     qb.skip((page - 1) * limit).take(limit);
     const templates = await qb.getMany();
 
-    return createPaginatedResponse(templates.map(t => this.toResponseDto(t)), total, page, limit);
+    return createPaginatedResponse(
+      templates.map((t) => this.toResponseDto(t)),
+      total,
+      page,
+      limit
+    );
   }
 
   async findOne(id: string): Promise<CoachTemplateResponseDto> {
     const template = await this.repository.findOne({ where: { id } });
-    if (!template) throw new NotFoundException('Template not found');
+    if (!template) throw new NotFoundException("Template not found");
     return this.toResponseDto(template);
   }
 
   async update(id: string, dto: UpdateCoachTemplateDto): Promise<CoachTemplateResponseDto> {
     const template = await this.repository.findOne({ where: { id } });
-    if (!template) throw new NotFoundException('Template not found');
+    if (!template) throw new NotFoundException("Template not found");
     Object.assign(template, dto);
     const saved = await this.repository.save(template);
     return this.toResponseDto(saved);
@@ -51,15 +56,15 @@ export class CoachTemplateService {
 
   async remove(id: string): Promise<{ success: boolean; message: string }> {
     const template = await this.repository.findOne({ where: { id } });
-    if (!template) throw new NotFoundException('Template not found');
+    if (!template) throw new NotFoundException("Template not found");
     await this.repository.remove(template);
-    return { success: true, message: 'Template deleted' };
+    return { success: true, message: "Template deleted" };
   }
 
   private calculateFinalPrice(price: number, discount: number | null, discountType: DiscountType | null): number {
     if (!discount || !discountType) return price;
     if (discountType === DiscountType.PERCENTAGE) {
-      return Math.round((price - (price * discount / 100)) * 100) / 100;
+      return Math.round((price - (price * discount) / 100) * 100) / 100;
     }
     return Math.max(0, price - discount);
   }
