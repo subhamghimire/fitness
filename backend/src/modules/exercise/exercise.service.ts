@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { EntityManager, Repository } from "typeorm";
 import { Exercise } from "./entities/exercise.entity";
 import { FilesService } from "../files/files.service";
 import { createPaginatedResponse } from "src/common/dto";
@@ -145,6 +145,49 @@ export class ExerciseService {
 
     await this.exerciseRepository.remove(exercise);
     return { success: true, message: `Exercise "${exercise.title}" deleted successfully` };
+  }
+
+  /**
+   * Find an exercise catalog entry by title or create a "custom exercise"
+   * owned by nobody but usable by any user (mirrors what the sync pipeline
+   * does for exercises it can't resolve). Runs inside a caller-owned
+   * transaction so offline push + catalog creation commit atomically.
+   *
+   * Retries with a numeric suffix when the derived slug collides (unique
+   * constraint on `exercises.slug`), so concurrent custom-exercise creates
+   * never 500 on the driver's duplicate-key error.
+   */
+  async findOrCreateCustomExercise(manager: EntityManager, title: string): Promise<Exercise> {
+    const trimmed = title.trim();
+    const existing = await manager.findOne(Exercise, { where: { title: trimmed, isDeleted: false } });
+    if (existing) return existing;
+
+    const baseSlug = this.slugify(trimmed) || "custom-exercise";
+    for (let attempt = 1; attempt <= 20; attempt++) {
+      const slug = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
+      try {
+        const entity = this.exerciseRepository.create({
+          title: trimmed,
+          slug,
+          description: "Custom exercise created from app"
+        });
+        return await manager.save(Exercise, entity);
+      } catch (error: unknown) {
+        // unique_violation on slug
+        const pgError = error as { driverError?: { code?: string } };
+        if (pgError?.driverError?.code === "23505" && attempt < 20) continue;
+        throw error;
+      }
+    }
+    throw new ConflictException("Unable to create custom exercise: slug collision");
+  }
+
+  private slugify(value: string): string {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 255);
   }
 
   private toResponseDto(exercise: Exercise): ExerciseResponseDto {

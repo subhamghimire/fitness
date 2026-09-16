@@ -1,9 +1,10 @@
 import { Entity, Column, OneToMany, Index, OneToOne, JoinColumn } from "typeorm";
-import { Workout } from "../../workouts/entities/workout.entity";
+import { Workout } from "../../workout/entities/workout.entity";
+import { WorkoutTemplate } from "../../workout/entities/workout-template.entity";
 import { AbstractEntity } from "src/entities";
 import { Gender, UserRole } from "../enums";
 import { CoachRating } from "src/modules/coach-rating/entities/coach-rating.entity";
-import { UserWorkout } from "src/modules/user-workout/entities/user-workout.entity";
+import { FavoriteExercise } from "src/modules/favorite-exercise/entities/favorite-exercise.entity";
 import { Coach } from "src/modules/coach/entities/coach.entity";
 import { FileEntity } from "src/modules/files/entities/file.entity";
 
@@ -38,11 +39,14 @@ export class User extends AbstractEntity {
   @OneToMany(() => Workout, (w) => w.user)
   workouts: Workout[];
 
+  @OneToMany(() => WorkoutTemplate, (t) => t.user)
+  workoutTemplates: WorkoutTemplate[];
+
   @OneToMany(() => CoachRating, (rating) => rating.user)
   coachRatings: CoachRating[];
 
-  @OneToMany(() => UserWorkout, (workout) => workout.user)
-  userWorkouts: UserWorkout[];
+  @OneToMany(() => FavoriteExercise, (favorite) => favorite.user)
+  favoriteExercises: FavoriteExercise[];
 
   @OneToOne(() => Coach, (coach) => coach.user)
   coachProfile: Coach;

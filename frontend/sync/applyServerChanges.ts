@@ -70,7 +70,8 @@ export async function applyServerChanges(changes: SyncBatchChanges): Promise<voi
       if (existing) {
         await db.runAsync(
           `UPDATE workouts_local SET
-            status = 'completed', name = ?, notes = ?, started_at = ?, ended_at = ?,
+            status = CASE WHEN status = 'active' THEN 'active' ELSE 'completed' END,
+            name = ?, notes = ?, started_at = ?, ended_at = ?,
             updated_at = ?, client_updated_at = ?, server_updated_at = ?, deleted_at = NULL,
             sync_status = 'synced', revision = ?, last_synced_revision = ?, last_synced_at = ?
            WHERE id = ?`,

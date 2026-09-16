@@ -3,6 +3,9 @@ import { User } from "../../users/entities/user.entity";
 import { WorkoutExercise } from "./workout-exercise.entity";
 import { AbstractEntity } from "src/entities";
 
+/**
+ * WORKOUT SESSION — a historical workout actually performed by a user.
+ */
 @Entity("workouts")
 export class Workout extends AbstractEntity {
   @Index()

@@ -39,8 +39,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
 
   const workoutRows = await db.getAllAsync<DirtyRow>(
     `SELECT * FROM workouts_local
-     WHERE status = 'completed'
-       AND (sync_status IN ('pending','conflict') OR last_synced_revision IS NULL OR revision > COALESCE(last_synced_revision, 0))
+     WHERE (sync_status IN ('pending','conflict') OR last_synced_revision IS NULL OR revision > COALESCE(last_synced_revision, 0))
      ORDER BY client_updated_at ASC
      LIMIT ?`,
     [remaining]
@@ -67,8 +66,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
   const exerciseRows = await db.getAllAsync<DirtyRow>(
     `SELECT e.* FROM exercises_local e
      JOIN workouts_local w ON w.id = e.workout_id
-     WHERE w.status = 'completed'
-       AND (e.sync_status IN ('pending','conflict') OR e.last_synced_revision IS NULL OR e.revision > COALESCE(e.last_synced_revision, 0))
+     WHERE (e.sync_status IN ('pending','conflict') OR e.last_synced_revision IS NULL OR e.revision > COALESCE(e.last_synced_revision, 0))
      ORDER BY e.client_updated_at ASC
      LIMIT ?`,
     [remaining]
@@ -95,8 +93,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
     `SELECT s.* FROM sets_local s
      JOIN exercises_local e ON e.id = s.exercise_id
      JOIN workouts_local w ON w.id = e.workout_id
-     WHERE w.status = 'completed'
-       AND (s.sync_status IN ('pending','conflict') OR s.last_synced_revision IS NULL OR s.revision > COALESCE(s.last_synced_revision, 0))
+     WHERE (s.sync_status IN ('pending','conflict') OR s.last_synced_revision IS NULL OR s.revision > COALESCE(s.last_synced_revision, 0))
      ORDER BY s.client_updated_at ASC
      LIMIT ?`,
     [remaining]

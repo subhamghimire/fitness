@@ -6,6 +6,7 @@ module.exports = {
   testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    '^expo-sqlite$': '<rootDir>/sync/__tests__/mocks/expo-sqlite.js',
   },
   clearMocks: true,
 };

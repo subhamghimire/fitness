@@ -437,7 +437,7 @@ export async function countPendingChanges(): Promise<number> {
   const db = getDatabase();
   const dirty = `sync_status IN ('pending','conflict') OR last_synced_revision IS NULL OR revision > COALESCE(last_synced_revision, 0)`;
   const tables = [
-    `workouts_local WHERE status = 'completed' AND (${dirty})`,
+    `workouts_local WHERE (${dirty})`,
     `exercises_local WHERE (${dirty})`,
     `sets_local WHERE (${dirty})`,
     `templates_local WHERE (${dirty})`,

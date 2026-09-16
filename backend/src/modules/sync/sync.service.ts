@@ -1,21 +1,20 @@
 import { Injectable, Logger, BadRequestException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource, EntityManager, In, MoreThan } from "typeorm";
-import { Workout } from "../workouts/entities/workout.entity";
-import { WorkoutExercise } from "../workouts/entities/workout-exercise.entity";
-import { Set } from "../workouts/entities/set.entity";
-import { Exercise } from "../exercise/entities/exercise.entity";
-import { UserTemplate } from "../workouts/entities/user-template.entity";
-import { UserTemplateExercise } from "../workouts/entities/user-template-exercise.entity";
-import { UserTemplateSet } from "../workouts/entities/user-template-set.entity";
+import { Workout } from "../workout/entities/workout.entity";
+import { WorkoutExercise } from "../workout/entities/workout-exercise.entity";
+import { Set } from "../workout/entities/set.entity";
+import { WorkoutTemplate } from "../workout/entities/workout-template.entity";
+import { WorkoutTemplateExercise } from "../workout/entities/workout-template-exercise.entity";
+import { WorkoutTemplateSet } from "../workout/entities/workout-template-set.entity";
 import { UserSyncState } from "./entities/user-sync-state.entity";
-import { SyncChange, SyncOperation } from "./entities/sync-change.entity";
+import { SyncChange } from "./entities/sync-change.entity";
 import { User } from "../users/entities/user.entity";
 import { SyncWorkoutDto } from "./dto/sync-workout.dto";
 import { SyncBatchRequestDto, SyncChangeItemDto } from "./dto/sync-batch.dto";
-import { resolveWinner, isIdempotentReplay } from "./sync-conflict.util";
+import { WorkoutService } from "../workout/workout.service";
+import { WorkoutTemplateService } from "../workout/workout-template.service";
 
-/** Maximum number of individual change items allowed per sync batch. */
 export const MAX_BATCH_ITEMS = 500;
 
 type Accepted = { entityType: string; id: string; revision: number };
@@ -52,15 +51,11 @@ export class SyncService {
   private readonly logger = new Logger(SyncService.name);
 
   constructor(
-    @InjectRepository(Workout) private workoutsRepo: Repository<Workout>,
-    @InjectRepository(WorkoutExercise) private workoutExercisesRepo: Repository<WorkoutExercise>,
-    @InjectRepository(Set) private setsRepo: Repository<Set>,
-    @InjectRepository(UserTemplate) private templatesRepo: Repository<UserTemplate>,
-    @InjectRepository(UserTemplateExercise) private templateExercisesRepo: Repository<UserTemplateExercise>,
-    @InjectRepository(UserTemplateSet) private templateSetsRepo: Repository<UserTemplateSet>,
-    @InjectRepository(UserSyncState) private syncStateRepo: Repository<UserSyncState>,
+    @InjectRepository(UserSyncState) private _syncStateRepo: Repository<UserSyncState>,
     @InjectRepository(SyncChange) private syncChangesRepo: Repository<SyncChange>,
-    private dataSource: DataSource
+    private dataSource: DataSource,
+    private workoutService: WorkoutService,
+    private workoutTemplateService: WorkoutTemplateService
   ) {}
 
   // ─── Legacy endpoint (kept for backward compat) ──────────────────────────
@@ -163,30 +158,27 @@ export class SyncService {
       const manager = qr.manager;
 
       for (const item of changes.workouts || []) {
-        await this.applyWorkoutChange(manager, user, item, accepted, rejected, conflicts);
+        await this.workoutService.applyWorkoutChange(manager, user, item, accepted, rejected, conflicts);
       }
       for (const item of changes.workoutExercises || []) {
-        await this.applyWorkoutExerciseChange(manager, user, item, accepted, rejected, conflicts);
+        await this.workoutService.applyWorkoutExerciseChange(manager, user, item, accepted, rejected, conflicts);
       }
       for (const item of changes.sets || []) {
-        await this.applySetChange(manager, user, item, accepted, rejected, conflicts);
+        await this.workoutService.applySetChange(manager, user, item, accepted, rejected, conflicts);
       }
       for (const item of changes.templates || []) {
-        await this.applyTemplateChange(manager, user, item, accepted, rejected, conflicts);
+        await this.workoutTemplateService.applyTemplateChange(manager, user, item, accepted, rejected, conflicts);
       }
       for (const item of changes.templateExercises || []) {
-        await this.applyTemplateExerciseChange(manager, user, item, accepted, rejected, conflicts);
+        await this.workoutTemplateService.applyTemplateExerciseChange(manager, user, item, accepted, rejected, conflicts);
       }
       for (const item of changes.templateSets || []) {
-        await this.applyTemplateSetChange(manager, user, item, accepted, rejected, conflicts);
+        await this.workoutTemplateService.applyTemplateSetChange(manager, user, item, accepted, rejected, conflicts);
       }
 
       const lastSyncRevision = dto.lastSyncRevision ?? 0;
       const { serverChanges, nextRevision } = await this.collectServerChanges(manager, user.id, lastSyncRevision);
 
-      // Upsert sync state atomically (INSERT ... ON CONFLICT DO UPDATE) so two
-      // concurrent first-time syncs from different devices cannot race on the
-      // unique user_id index and crash one transaction with a duplicate key error.
       await manager.upsert(
         UserSyncState,
         {
@@ -216,725 +208,8 @@ export class SyncService {
     }
   }
 
-  // ─── Push: entity change handlers ────────────────────────────────────────
-
-  private async applyWorkoutChange(manager: EntityManager, user: User, item: SyncChangeItemDto, accepted: Accepted[], rejected: Rejected[], conflicts: Conflict[]) {
-    const existing = await manager.findOne(Workout, { where: { id: item.id } });
-    if (existing && existing.userId !== user.id) {
-      rejected.push({ entityType: "workout", id: item.id, reason: "ownership" });
-      return;
-    }
-
-    if (item.op === "delete") {
-      if (!existing) {
-        await this.recordChange(manager, user.id, "workout", item.id, "delete", item.revision);
-        accepted.push({ entityType: "workout", id: item.id, revision: item.revision });
-        return;
-      }
-      const serverRevision = existing.revision ?? 1;
-      const existingTime = existing.clientUpdatedAt ?? existing.updatedAt;
-      const winner = resolveWinner(item.clientUpdatedAt, existingTime, item.revision, serverRevision, {
-        clientDeleted: true,
-        serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
-      });
-      if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
-          conflicts.push({
-            entityType: "workout",
-            id: item.id,
-            clientRevision: item.revision,
-            serverRevision,
-            resolvedWith: "server"
-          });
-        }
-        accepted.push({ entityType: "workout", id: item.id, revision: serverRevision });
-        return;
-      }
-      existing.isDeleted = true;
-      existing.deletedAt = new Date(item.clientUpdatedAt);
-      existing.deletedBy = user.id;
-      existing.revision = Math.max(item.revision, serverRevision);
-      existing.clientUpdatedAt = new Date(item.clientUpdatedAt);
-      await manager.save(Workout, existing);
-      await this.recordChange(manager, user.id, "workout", item.id, "delete", existing.revision);
-      accepted.push({ entityType: "workout", id: item.id, revision: existing.revision });
-      return;
-    }
-
-    const p = item.payload || {};
-    if (existing) {
-      const serverRevision = existing.revision ?? 1;
-      const existingTime = existing.clientUpdatedAt ?? existing.updatedAt;
-      const winner = resolveWinner(item.clientUpdatedAt, existingTime, item.revision, serverRevision, {
-        clientDeleted: false,
-        serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
-      });
-      if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
-          conflicts.push({
-            entityType: "workout",
-            id: item.id,
-            clientRevision: item.revision,
-            serverRevision,
-            resolvedWith: "server"
-          });
-        }
-        accepted.push({ entityType: "workout", id: item.id, revision: serverRevision });
-        return;
-      }
-      existing.name = (p.name as string) ?? existing.name;
-      existing.notes = (p.notes as string) ?? existing.notes;
-      if (p.startedAt) existing.startedAt = new Date(p.startedAt as string);
-      existing.endedAt = p.endedAt ? new Date(p.endedAt as string) : existing.endedAt;
-      existing.durationSeconds = (p.durationSeconds as number) ?? existing.durationSeconds;
-      existing.revision = Math.max(item.revision, serverRevision);
-      existing.isDeleted = false;
-      existing.deletedAt = null;
-      existing.deletedBy = null;
-      existing.clientUpdatedAt = new Date(item.clientUpdatedAt);
-      await manager.save(Workout, existing);
-      await this.recordChange(manager, user.id, "workout", item.id, "update", existing.revision);
-    } else {
-      await manager.insert(Workout, {
-        id: item.id,
-        userId: user.id,
-        name: (p.name as string) ?? null,
-        notes: (p.notes as string) ?? null,
-        startedAt: new Date((p.startedAt as string) || item.clientUpdatedAt),
-        endedAt: p.endedAt ? new Date(p.endedAt as string) : null,
-        durationSeconds: (p.durationSeconds as number) ?? null,
-        revision: item.revision,
-        clientUpdatedAt: new Date(item.clientUpdatedAt)
-      });
-      await this.recordChange(manager, user.id, "workout", item.id, "create", item.revision);
-    }
-    accepted.push({ entityType: "workout", id: item.id, revision: item.revision });
-  }
-
-  private async applyWorkoutExerciseChange(manager: EntityManager, user: User, item: SyncChangeItemDto, accepted: Accepted[], rejected: Rejected[], conflicts: Conflict[]) {
-    const p = item.payload || {};
-    const existing = await manager.findOne(WorkoutExercise, { where: { id: item.id } });
-
-    if (item.op === "delete") {
-      if (!existing) {
-        await this.recordChange(manager, user.id, "workoutExercise", item.id, "delete", item.revision);
-        accepted.push({ entityType: "workoutExercise", id: item.id, revision: item.revision });
-        return;
-      }
-      if (!(await this.userOwnsWorkoutExercise(manager, user.id, existing))) {
-        rejected.push({ entityType: "workoutExercise", id: item.id, reason: "ownership" });
-        return;
-      }
-      const serverRevision = existing.revision ?? 1;
-      const existingTime = existing.clientUpdatedAt ?? existing.updatedAt;
-      const winner = resolveWinner(item.clientUpdatedAt, existingTime, item.revision, serverRevision, {
-        clientDeleted: true,
-        serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
-      });
-      if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
-          conflicts.push({
-            entityType: "workoutExercise",
-            id: item.id,
-            clientRevision: item.revision,
-            serverRevision,
-            resolvedWith: "server"
-          });
-        }
-        accepted.push({ entityType: "workoutExercise", id: item.id, revision: serverRevision });
-        return;
-      }
-      existing.isDeleted = true;
-      existing.deletedAt = new Date(item.clientUpdatedAt);
-      existing.deletedBy = user.id;
-      existing.revision = Math.max(item.revision, serverRevision);
-      existing.clientUpdatedAt = new Date(item.clientUpdatedAt);
-      await manager.save(WorkoutExercise, existing);
-      await this.recordChange(manager, user.id, "workoutExercise", item.id, "delete", existing.revision);
-      accepted.push({ entityType: "workoutExercise", id: item.id, revision: existing.revision });
-      return;
-    }
-
-    let exerciseId = (p.exerciseId as string) || null;
-    const name = (p.name as string) || null;
-    if (!exerciseId && name) {
-      exerciseId = await this.resolveExerciseId(manager, name);
-    }
-    if (!exerciseId) {
-      rejected.push({ entityType: "workoutExercise", id: item.id, reason: "missing_exercise" });
-      return;
-    }
-    const workoutId = (p.workoutId as string) || null;
-    if (!workoutId) {
-      rejected.push({ entityType: "workoutExercise", id: item.id, reason: "missing_workout" });
-      return;
-    }
-
-    if (existing) {
-      if (!(await this.userOwnsWorkoutExercise(manager, user.id, existing))) {
-        rejected.push({ entityType: "workoutExercise", id: item.id, reason: "ownership" });
-        return;
-      }
-      if (existing.workoutId !== workoutId) {
-        const target = await manager.findOne(Workout, { where: { id: workoutId } });
-        if (!target || target.userId !== user.id) {
-          rejected.push({ entityType: "workoutExercise", id: item.id, reason: "ownership" });
-          return;
-        }
-      }
-      const serverRevision = existing.revision ?? 1;
-      const existingTime = existing.clientUpdatedAt ?? existing.updatedAt;
-      const winner = resolveWinner(item.clientUpdatedAt, existingTime, item.revision, serverRevision, {
-        clientDeleted: false,
-        serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
-      });
-      if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
-          conflicts.push({
-            entityType: "workoutExercise",
-            id: item.id,
-            clientRevision: item.revision,
-            serverRevision,
-            resolvedWith: "server"
-          });
-        }
-        accepted.push({ entityType: "workoutExercise", id: item.id, revision: serverRevision });
-        return;
-      }
-      existing.workoutId = workoutId;
-      existing.exerciseId = exerciseId;
-      existing.name = name;
-      existing.orderIndex = (p.orderIndex as number) ?? existing.orderIndex;
-      existing.notes = (p.notes as string) ?? existing.notes;
-      existing.restSeconds = (p.restSeconds as number) ?? existing.restSeconds;
-      existing.revision = Math.max(item.revision, serverRevision);
-      existing.isDeleted = false;
-      existing.deletedAt = null;
-      existing.deletedBy = null;
-      existing.clientUpdatedAt = new Date(item.clientUpdatedAt);
-      await manager.save(WorkoutExercise, existing);
-      await this.recordChange(manager, user.id, "workoutExercise", item.id, "update", existing.revision);
-    } else {
-      const target = await manager.findOne(Workout, { where: { id: workoutId } });
-      if (!target || target.userId !== user.id) {
-        rejected.push({ entityType: "workoutExercise", id: item.id, reason: "ownership" });
-        return;
-      }
-      await manager.insert(WorkoutExercise, {
-        id: item.id,
-        workoutId,
-        exerciseId,
-        name,
-        orderIndex: (p.orderIndex as number) ?? 0,
-        notes: (p.notes as string) ?? null,
-        restSeconds: (p.restSeconds as number) ?? null,
-        revision: item.revision,
-        clientUpdatedAt: new Date(item.clientUpdatedAt)
-      });
-      await this.recordChange(manager, user.id, "workoutExercise", item.id, "create", item.revision);
-    }
-    accepted.push({ entityType: "workoutExercise", id: item.id, revision: item.revision });
-  }
-
-  private async applySetChange(manager: EntityManager, user: User, item: SyncChangeItemDto, accepted: Accepted[], rejected: Rejected[], conflicts: Conflict[]) {
-    const p = item.payload || {};
-    const existing = await manager.findOne(Set, { where: { id: item.id } });
-
-    if (item.op === "delete") {
-      if (!existing) {
-        await this.recordChange(manager, user.id, "set", item.id, "delete", item.revision);
-        accepted.push({ entityType: "set", id: item.id, revision: item.revision });
-        return;
-      }
-      if (!(await this.userOwnsSet(manager, user.id, existing))) {
-        rejected.push({ entityType: "set", id: item.id, reason: "ownership" });
-        return;
-      }
-      const serverRevision = existing.revision ?? 1;
-      const existingTime = existing.clientUpdatedAt ?? existing.updatedAt;
-      const winner = resolveWinner(item.clientUpdatedAt, existingTime, item.revision, serverRevision, {
-        clientDeleted: true,
-        serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
-      });
-      if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
-          conflicts.push({
-            entityType: "set",
-            id: item.id,
-            clientRevision: item.revision,
-            serverRevision,
-            resolvedWith: "server"
-          });
-        }
-        accepted.push({ entityType: "set", id: item.id, revision: serverRevision });
-        return;
-      }
-      existing.isDeleted = true;
-      existing.deletedAt = new Date(item.clientUpdatedAt);
-      existing.deletedBy = user.id;
-      existing.revision = Math.max(item.revision, serverRevision);
-      existing.clientUpdatedAt = new Date(item.clientUpdatedAt);
-      await manager.save(Set, existing);
-      await this.recordChange(manager, user.id, "set", item.id, "delete", existing.revision);
-      accepted.push({ entityType: "set", id: item.id, revision: existing.revision });
-      return;
-    }
-
-    const workoutExerciseId = p.workoutExerciseId as string;
-    if (!workoutExerciseId) {
-      rejected.push({ entityType: "set", id: item.id, reason: "missing_exercise" });
-      return;
-    }
-
-    if (existing) {
-      if (!(await this.userOwnsSet(manager, user.id, existing))) {
-        rejected.push({ entityType: "set", id: item.id, reason: "ownership" });
-        return;
-      }
-      if (existing.workoutExerciseId !== workoutExerciseId) {
-        if (!(await this.workoutExerciseOwnedBy(manager, workoutExerciseId, user.id))) {
-          rejected.push({ entityType: "set", id: item.id, reason: "ownership" });
-          return;
-        }
-      }
-      const serverRevision = existing.revision ?? 1;
-      const existingTime = existing.clientUpdatedAt ?? existing.updatedAt;
-      const winner = resolveWinner(item.clientUpdatedAt, existingTime, item.revision, serverRevision, {
-        clientDeleted: false,
-        serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
-      });
-      if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
-          conflicts.push({
-            entityType: "set",
-            id: item.id,
-            clientRevision: item.revision,
-            serverRevision,
-            resolvedWith: "server"
-          });
-        }
-        accepted.push({ entityType: "set", id: item.id, revision: serverRevision });
-        return;
-      }
-      existing.workoutExerciseId = workoutExerciseId;
-      existing.orderIndex = (p.orderIndex as number) ?? existing.orderIndex;
-      existing.weight = (p.weight as number) ?? null;
-      existing.reps = (p.reps as number) ?? null;
-      existing.rpe = (p.rpe as number) ?? existing.rpe;
-      existing.isWarmup = Boolean(p.isWarmup);
-      existing.isDropset = Boolean(p.isDropset);
-      existing.isFailure = Boolean(p.isFailure);
-      existing.durationSeconds = (p.durationSeconds as number) ?? existing.durationSeconds;
-      existing.distance = (p.distance as number) ?? existing.distance;
-      existing.revision = Math.max(item.revision, serverRevision);
-      existing.isDeleted = false;
-      existing.deletedAt = null;
-      existing.deletedBy = null;
-      existing.clientUpdatedAt = new Date(item.clientUpdatedAt);
-      await manager.save(Set, existing);
-      await this.recordChange(manager, user.id, "set", item.id, "update", existing.revision);
-    } else {
-      if (!(await this.workoutExerciseOwnedBy(manager, workoutExerciseId, user.id))) {
-        rejected.push({ entityType: "set", id: item.id, reason: "ownership" });
-        return;
-      }
-      await manager.insert(Set, {
-        id: item.id,
-        workoutExerciseId,
-        orderIndex: (p.orderIndex as number) ?? 0,
-        weight: (p.weight as number) ?? null,
-        reps: (p.reps as number) ?? null,
-        rpe: (p.rpe as number) ?? null,
-        isWarmup: Boolean(p.isWarmup),
-        isDropset: Boolean(p.isDropset),
-        isFailure: Boolean(p.isFailure),
-        durationSeconds: (p.durationSeconds as number) ?? null,
-        distance: (p.distance as number) ?? null,
-        revision: item.revision,
-        clientUpdatedAt: new Date(item.clientUpdatedAt)
-      });
-      await this.recordChange(manager, user.id, "set", item.id, "create", item.revision);
-    }
-    accepted.push({ entityType: "set", id: item.id, revision: item.revision });
-  }
-
-  private async applyTemplateChange(manager: EntityManager, user: User, item: SyncChangeItemDto, accepted: Accepted[], rejected: Rejected[], conflicts: Conflict[]) {
-    const existing = await manager.findOne(UserTemplate, { where: { id: item.id } });
-    if (existing && existing.userId !== user.id) {
-      rejected.push({ entityType: "template", id: item.id, reason: "ownership" });
-      return;
-    }
-    if (item.op === "delete") {
-      if (!existing) {
-        await this.recordChange(manager, user.id, "template", item.id, "delete", item.revision);
-        accepted.push({ entityType: "template", id: item.id, revision: item.revision });
-        return;
-      }
-      const serverRevision = existing.revision ?? 1;
-      const existingTime = existing.clientUpdatedAt ?? existing.updatedAt;
-      const winner = resolveWinner(item.clientUpdatedAt, existingTime, item.revision, serverRevision, {
-        clientDeleted: true,
-        serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
-      });
-      if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
-          conflicts.push({
-            entityType: "template",
-            id: item.id,
-            clientRevision: item.revision,
-            serverRevision,
-            resolvedWith: "server"
-          });
-        }
-        accepted.push({ entityType: "template", id: item.id, revision: serverRevision });
-        return;
-      }
-      existing.isDeleted = true;
-      existing.deletedAt = new Date(item.clientUpdatedAt);
-      existing.deletedBy = user.id;
-      existing.revision = Math.max(item.revision, serverRevision);
-      existing.clientUpdatedAt = new Date(item.clientUpdatedAt);
-      await manager.save(UserTemplate, existing);
-      await this.recordChange(manager, user.id, "template", item.id, "delete", existing.revision);
-      accepted.push({ entityType: "template", id: item.id, revision: existing.revision });
-      return;
-    }
-    const p = item.payload || {};
-    if (existing) {
-      const serverRevision = existing.revision ?? 1;
-      const existingTime = existing.clientUpdatedAt ?? existing.updatedAt;
-      const winner = resolveWinner(item.clientUpdatedAt, existingTime, item.revision, serverRevision, {
-        clientDeleted: false,
-        serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
-      });
-      if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
-          conflicts.push({
-            entityType: "template",
-            id: item.id,
-            clientRevision: item.revision,
-            serverRevision,
-            resolvedWith: "server"
-          });
-        }
-        accepted.push({ entityType: "template", id: item.id, revision: serverRevision });
-        return;
-      }
-      existing.name = (p.name as string) || existing.name;
-      existing.revision = Math.max(item.revision, serverRevision);
-      existing.isDeleted = false;
-      existing.deletedAt = null;
-      existing.deletedBy = null;
-      existing.clientUpdatedAt = new Date(item.clientUpdatedAt);
-      await manager.save(UserTemplate, existing);
-      await this.recordChange(manager, user.id, "template", item.id, "update", existing.revision);
-    } else {
-      await manager.insert(UserTemplate, {
-        id: item.id,
-        userId: user.id,
-        name: (p.name as string) || "Template",
-        revision: item.revision,
-        clientUpdatedAt: new Date(item.clientUpdatedAt)
-      });
-      await this.recordChange(manager, user.id, "template", item.id, "create", item.revision);
-    }
-    accepted.push({ entityType: "template", id: item.id, revision: item.revision });
-  }
-
-  private async applyTemplateExerciseChange(manager: EntityManager, user: User, item: SyncChangeItemDto, accepted: Accepted[], rejected: Rejected[], conflicts: Conflict[]) {
-    const p = item.payload || {};
-    const existing = await manager.findOne(UserTemplateExercise, { where: { id: item.id } });
-
-    if (item.op === "delete") {
-      if (!existing) {
-        await this.recordChange(manager, user.id, "templateExercise", item.id, "delete", item.revision);
-        accepted.push({ entityType: "templateExercise", id: item.id, revision: item.revision });
-        return;
-      }
-      if (!(await this.userOwnsTemplateExercise(manager, user.id, existing))) {
-        rejected.push({ entityType: "templateExercise", id: item.id, reason: "ownership" });
-        return;
-      }
-      const serverRevision = existing.revision ?? 1;
-      const existingTime = existing.clientUpdatedAt ?? existing.updatedAt;
-      const winner = resolveWinner(item.clientUpdatedAt, existingTime, item.revision, serverRevision, {
-        clientDeleted: true,
-        serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
-      });
-      if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
-          conflicts.push({
-            entityType: "templateExercise",
-            id: item.id,
-            clientRevision: item.revision,
-            serverRevision,
-            resolvedWith: "server"
-          });
-        }
-        accepted.push({ entityType: "templateExercise", id: item.id, revision: serverRevision });
-        return;
-      }
-      existing.isDeleted = true;
-      existing.deletedAt = new Date(item.clientUpdatedAt);
-      existing.deletedBy = user.id;
-      existing.revision = Math.max(item.revision, serverRevision);
-      existing.clientUpdatedAt = new Date(item.clientUpdatedAt);
-      await manager.save(UserTemplateExercise, existing);
-      await this.recordChange(manager, user.id, "templateExercise", item.id, "delete", existing.revision);
-      accepted.push({ entityType: "templateExercise", id: item.id, revision: existing.revision });
-      return;
-    }
-
-    const templateId = p.templateId as string;
-    if (!templateId) {
-      rejected.push({ entityType: "templateExercise", id: item.id, reason: "missing_template" });
-      return;
-    }
-
-    if (existing) {
-      if (!(await this.userOwnsTemplateExercise(manager, user.id, existing))) {
-        rejected.push({ entityType: "templateExercise", id: item.id, reason: "ownership" });
-        return;
-      }
-      if (existing.templateId !== templateId) {
-        const target = await manager.findOne(UserTemplate, { where: { id: templateId } });
-        if (!target || target.userId !== user.id) {
-          rejected.push({ entityType: "templateExercise", id: item.id, reason: "ownership" });
-          return;
-        }
-      }
-      const serverRevision = existing.revision ?? 1;
-      const existingTime = existing.clientUpdatedAt ?? existing.updatedAt;
-      const winner = resolveWinner(item.clientUpdatedAt, existingTime, item.revision, serverRevision, {
-        clientDeleted: false,
-        serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
-      });
-      if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
-          conflicts.push({
-            entityType: "templateExercise",
-            id: item.id,
-            clientRevision: item.revision,
-            serverRevision,
-            resolvedWith: "server"
-          });
-        }
-        accepted.push({ entityType: "templateExercise", id: item.id, revision: serverRevision });
-        return;
-      }
-      existing.templateId = templateId;
-      existing.name = (p.name as string) || existing.name;
-      existing.orderIndex = (p.orderIndex as number) ?? existing.orderIndex;
-      existing.revision = Math.max(item.revision, serverRevision);
-      existing.isDeleted = false;
-      existing.deletedAt = null;
-      existing.deletedBy = null;
-      existing.clientUpdatedAt = new Date(item.clientUpdatedAt);
-      await manager.save(UserTemplateExercise, existing);
-      await this.recordChange(manager, user.id, "templateExercise", item.id, "update", existing.revision);
-    } else {
-      const parent = await manager.findOne(UserTemplate, { where: { id: templateId } });
-      if (!parent || parent.userId !== user.id) {
-        rejected.push({ entityType: "templateExercise", id: item.id, reason: "ownership" });
-        return;
-      }
-      await manager.insert(UserTemplateExercise, {
-        id: item.id,
-        templateId,
-        userId: user.id,
-        name: (p.name as string) || "Exercise",
-        orderIndex: (p.orderIndex as number) ?? 0,
-        revision: item.revision,
-        clientUpdatedAt: new Date(item.clientUpdatedAt)
-      });
-      await this.recordChange(manager, user.id, "templateExercise", item.id, "create", item.revision);
-    }
-    accepted.push({ entityType: "templateExercise", id: item.id, revision: item.revision });
-  }
-
-  private async applyTemplateSetChange(manager: EntityManager, user: User, item: SyncChangeItemDto, accepted: Accepted[], rejected: Rejected[], conflicts: Conflict[]) {
-    const p = item.payload || {};
-    const existing = await manager.findOne(UserTemplateSet, { where: { id: item.id } });
-
-    if (item.op === "delete") {
-      if (!existing) {
-        await this.recordChange(manager, user.id, "templateSet", item.id, "delete", item.revision);
-        accepted.push({ entityType: "templateSet", id: item.id, revision: item.revision });
-        return;
-      }
-      if (!(await this.userOwnsTemplateSet(manager, user.id, existing))) {
-        rejected.push({ entityType: "templateSet", id: item.id, reason: "ownership" });
-        return;
-      }
-      const serverRevision = existing.revision ?? 1;
-      const existingTime = existing.clientUpdatedAt ?? existing.updatedAt;
-      const winner = resolveWinner(item.clientUpdatedAt, existingTime, item.revision, serverRevision, {
-        clientDeleted: true,
-        serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
-      });
-      if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
-          conflicts.push({
-            entityType: "templateSet",
-            id: item.id,
-            clientRevision: item.revision,
-            serverRevision,
-            resolvedWith: "server"
-          });
-        }
-        accepted.push({ entityType: "templateSet", id: item.id, revision: serverRevision });
-        return;
-      }
-      existing.isDeleted = true;
-      existing.deletedAt = new Date(item.clientUpdatedAt);
-      existing.deletedBy = user.id;
-      existing.revision = Math.max(item.revision, serverRevision);
-      existing.clientUpdatedAt = new Date(item.clientUpdatedAt);
-      await manager.save(UserTemplateSet, existing);
-      await this.recordChange(manager, user.id, "templateSet", item.id, "delete", existing.revision);
-      accepted.push({ entityType: "templateSet", id: item.id, revision: existing.revision });
-      return;
-    }
-
-    const templateExerciseId = p.templateExerciseId as string;
-    if (!templateExerciseId) {
-      rejected.push({ entityType: "templateSet", id: item.id, reason: "missing_exercise" });
-      return;
-    }
-
-    if (existing) {
-      if (!(await this.userOwnsTemplateSet(manager, user.id, existing))) {
-        rejected.push({ entityType: "templateSet", id: item.id, reason: "ownership" });
-        return;
-      }
-      if (existing.templateExerciseId !== templateExerciseId) {
-        if (!(await this.templateExerciseOwnedBy(manager, templateExerciseId, user.id))) {
-          rejected.push({ entityType: "templateSet", id: item.id, reason: "ownership" });
-          return;
-        }
-      }
-      const serverRevision = existing.revision ?? 1;
-      const existingTime = existing.clientUpdatedAt ?? existing.updatedAt;
-      const winner = resolveWinner(item.clientUpdatedAt, existingTime, item.revision, serverRevision, {
-        clientDeleted: false,
-        serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
-      });
-      if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
-          conflicts.push({
-            entityType: "templateSet",
-            id: item.id,
-            clientRevision: item.revision,
-            serverRevision,
-            resolvedWith: "server"
-          });
-        }
-        accepted.push({ entityType: "templateSet", id: item.id, revision: serverRevision });
-        return;
-      }
-      existing.templateExerciseId = templateExerciseId;
-      existing.orderIndex = (p.orderIndex as number) ?? existing.orderIndex;
-      existing.weight = (p.weight as number) ?? null;
-      existing.reps = (p.reps as number) ?? null;
-      existing.isWarmup = Boolean(p.isWarmup);
-      existing.isDropset = Boolean(p.isDropset);
-      existing.isFailure = Boolean(p.isFailure);
-      existing.revision = Math.max(item.revision, serverRevision);
-      existing.isDeleted = false;
-      existing.deletedAt = null;
-      existing.deletedBy = null;
-      existing.clientUpdatedAt = new Date(item.clientUpdatedAt);
-      await manager.save(UserTemplateSet, existing);
-      await this.recordChange(manager, user.id, "templateSet", item.id, "update", existing.revision);
-    } else {
-      if (!(await this.templateExerciseOwnedBy(manager, templateExerciseId, user.id))) {
-        rejected.push({ entityType: "templateSet", id: item.id, reason: "ownership" });
-        return;
-      }
-      await manager.insert(UserTemplateSet, {
-        id: item.id,
-        templateExerciseId,
-        userId: user.id,
-        orderIndex: (p.orderIndex as number) ?? 0,
-        weight: (p.weight as number) ?? null,
-        reps: (p.reps as number) ?? null,
-        isWarmup: Boolean(p.isWarmup),
-        isDropset: Boolean(p.isDropset),
-        isFailure: Boolean(p.isFailure),
-        revision: item.revision,
-        clientUpdatedAt: new Date(item.clientUpdatedAt)
-      });
-      await this.recordChange(manager, user.id, "templateSet", item.id, "create", item.revision);
-    }
-    accepted.push({ entityType: "templateSet", id: item.id, revision: item.revision });
-  }
-
-  // ─── Helpers: push ───────────────────────────────────────────────────────
-
-  private async recordChange(manager: EntityManager, userId: string, entityType: string, entityId: string, operation: SyncOperation, revision: number): Promise<void> {
-    await manager.insert(SyncChange, { userId, entityType, entityId, operation, revision });
-  }
-
-  private async resolveExerciseId(manager: EntityManager, name: string): Promise<string> {
-    let exercise = await manager.findOne(Exercise, { where: { title: name } });
-    if (!exercise) {
-      const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      const slug = `${baseSlug}-${Date.now().toString().slice(-6)}`;
-      exercise = manager.create(Exercise, {
-        title: name,
-        slug,
-        description: "Custom exercise created from app"
-      });
-      exercise = await manager.save(Exercise, exercise);
-    }
-    return exercise.id;
-  }
-
-  private async userOwnsWorkoutExercise(manager: EntityManager, userId: string, we: WorkoutExercise): Promise<boolean> {
-    if (!we.workoutId) return false;
-    const workout = await manager.findOne(Workout, { where: { id: we.workoutId } });
-    return !!workout && workout.userId === userId;
-  }
-
-  private async workoutExerciseOwnedBy(manager: EntityManager, workoutExerciseId: string, userId: string): Promise<boolean> {
-    const we = await manager.findOne(WorkoutExercise, { where: { id: workoutExerciseId } });
-    if (!we) return false;
-    return this.userOwnsWorkoutExercise(manager, userId, we);
-  }
-
-  private async userOwnsSet(manager: EntityManager, userId: string, set: Set): Promise<boolean> {
-    if (!set.workoutExerciseId) return false;
-    return this.workoutExerciseOwnedBy(manager, set.workoutExerciseId, userId);
-  }
-
-  private async userOwnsTemplateExercise(manager: EntityManager, userId: string, te: UserTemplateExercise): Promise<boolean> {
-    if (!te.templateId) return false;
-    const template = await manager.findOne(UserTemplate, { where: { id: te.templateId } });
-    return !!template && template.userId === userId;
-  }
-
-  private async templateExerciseOwnedBy(manager: EntityManager, templateExerciseId: string, userId: string): Promise<boolean> {
-    const te = await manager.findOne(UserTemplateExercise, { where: { id: templateExerciseId } });
-    if (!te) return false;
-    return this.userOwnsTemplateExercise(manager, userId, te);
-  }
-
-  private async userOwnsTemplateSet(manager: EntityManager, userId: string, ts: UserTemplateSet): Promise<boolean> {
-    if (!ts.templateExerciseId) return false;
-    return this.templateExerciseOwnedBy(manager, ts.templateExerciseId, userId);
-  }
-
   // ─── Pull: cursor-based server changes ───────────────────────────────────
 
-  /**
-   * Cursor → changes after cursor → records/tombstones → new cursor.
-   *
-   * When `lastSyncRevision` is 0 the client has never synced; we load every
-   * entity for the user so the device can bootstrap. For incremental pulls
-   * we read from `sync_changes` (append-only log), deduplicate by entity
-   * (keeping only the latest mutation per entity), and batch-load current
-   * entity states. Tombstones are returned for soft-deleted entities.
-   */
   private async collectServerChanges(
     manager: EntityManager,
     userId: string,
@@ -955,7 +230,6 @@ export class SyncService {
 
     const nextRevision = changeRows[changeRows.length - 1].id;
 
-    // Deduplicate: keep only the latest change per (entityType, entityId).
     const latestByEntity = new Map<string, SyncChange>();
     for (const row of changeRows) {
       const key = `${row.entityType}:${row.entityId}`;
@@ -981,7 +255,6 @@ export class SyncService {
         if (entity) {
           batch.workouts.push(this.toWorkoutItem(entity));
         } else {
-          // Tombstone: entity was hard-deleted by another path.
           batch.workouts.push({
             op: "delete",
             id: ch.entityId,
@@ -1020,7 +293,7 @@ export class SyncService {
       }
     }
 
-    // Sets — need to join through workout_exercises → workouts for ownership.
+    // Sets
     const setChanges = byType.get("set") || [];
     if (setChanges.length > 0) {
       const ids = setChanges.map((c) => c.entityId);
@@ -1052,7 +325,7 @@ export class SyncService {
     const templateChanges = byType.get("template") || [];
     if (templateChanges.length > 0) {
       const ids = templateChanges.map((c) => c.entityId);
-      const entities = await manager.find(UserTemplate, { where: { id: In(ids), userId } });
+      const entities = await manager.find(WorkoutTemplate, { where: { id: In(ids), userId } });
       const map = new Map(entities.map((e) => [e.id, e]));
       for (const ch of templateChanges) {
         const entity = map.get(ch.entityId);
@@ -1074,7 +347,7 @@ export class SyncService {
     const teChanges = byType.get("templateExercise") || [];
     if (teChanges.length > 0) {
       const ids = teChanges.map((c) => c.entityId);
-      const entities = await manager.find(UserTemplateExercise, { where: { id: In(ids), userId } });
+      const entities = await manager.find(WorkoutTemplateExercise, { where: { id: In(ids), userId } });
       const map = new Map(entities.map((e) => [e.id, e]));
       for (const ch of teChanges) {
         const entity = map.get(ch.entityId);
@@ -1096,7 +369,7 @@ export class SyncService {
     const tsChanges = byType.get("templateSet") || [];
     if (tsChanges.length > 0) {
       const ids = tsChanges.map((c) => c.entityId);
-      const entities = await manager.find(UserTemplateSet, { where: { id: In(ids), userId } });
+      const entities = await manager.find(WorkoutTemplateSet, { where: { id: In(ids), userId } });
       const map = new Map(entities.map((e) => [e.id, e]));
       for (const ch of tsChanges) {
         const entity = map.get(ch.entityId);
@@ -1117,11 +390,6 @@ export class SyncService {
     return { serverChanges: batch, nextRevision };
   }
 
-  /**
-   * Initial sync: load every syncable entity owned by the user.
-   * Returns all entities plus the current max cursor so the client
-   * has a starting point for future incremental pulls.
-   */
   private async loadAllEntities(manager: EntityManager, userId: string): Promise<{ serverChanges: ReturnType<typeof emptyBatch>; nextRevision: number }> {
     const batch = emptyBatch();
 
@@ -1140,19 +408,18 @@ export class SyncService {
       }
     }
 
-    batch.templates = (await manager.find(UserTemplate, { where: { userId } })).map((t) => this.toTemplateItem(t));
+    batch.templates = (await manager.find(WorkoutTemplate, { where: { userId } })).map((t) => this.toTemplateItem(t));
 
     const templateIds = batch.templates.map((t) => t.id).filter(Boolean);
     if (templateIds.length > 0) {
-      batch.templateExercises = (await manager.find(UserTemplateExercise, { where: { templateId: In(templateIds) } })).map((e) => this.toTemplateExerciseItem(e));
+      batch.templateExercises = (await manager.find(WorkoutTemplateExercise, { where: { templateId: In(templateIds) } })).map((e) => this.toTemplateExerciseItem(e));
 
       const teIds = batch.templateExercises.map((e) => e.id).filter(Boolean);
       if (teIds.length > 0) {
-        batch.templateSets = (await manager.find(UserTemplateSet, { where: { templateExerciseId: In(teIds) } })).map((s) => this.toTemplateSetItem(s));
+        batch.templateSets = (await manager.find(WorkoutTemplateSet, { where: { templateExerciseId: In(teIds) } })).map((s) => this.toTemplateSetItem(s));
       }
     }
 
-    // Max cursor for this user: the highest sync_changes.id we've written.
     const maxRow = await manager.createQueryBuilder(SyncChange, "sc").select("MAX(sc.id)", "maxId").where("sc.user_id = :userId", { userId }).getRawOne<{ maxId: string | null }>();
     const nextRevision = maxRow?.maxId ? parseInt(maxRow.maxId, 10) : 0;
 
@@ -1239,7 +506,7 @@ export class SyncService {
     };
   }
 
-  private toTemplateItem(e: UserTemplate): SyncChangeItemDto {
+  private toTemplateItem(e: WorkoutTemplate): SyncChangeItemDto {
     const deleted = e.isDeleted || !!e.deletedAt;
     return {
       op: deleted ? "delete" : "upsert",
@@ -1260,7 +527,7 @@ export class SyncService {
     };
   }
 
-  private toTemplateExerciseItem(e: UserTemplateExercise): SyncChangeItemDto {
+  private toTemplateExerciseItem(e: WorkoutTemplateExercise): SyncChangeItemDto {
     const deleted = e.isDeleted || !!e.deletedAt;
     return {
       op: deleted ? "delete" : "upsert",
@@ -1282,7 +549,7 @@ export class SyncService {
     };
   }
 
-  private toTemplateSetItem(e: UserTemplateSet): SyncChangeItemDto {
+  private toTemplateSetItem(e: WorkoutTemplateSet): SyncChangeItemDto {
     const deleted = e.isDeleted || !!e.deletedAt;
     return {
       op: deleted ? "delete" : "upsert",
@@ -1297,9 +564,12 @@ export class SyncService {
             orderIndex: e.orderIndex,
             weight: e.weight,
             reps: e.reps,
+            rpe: e.rpe,
             isWarmup: e.isWarmup,
             isDropset: e.isDropset,
             isFailure: e.isFailure,
+            durationSeconds: e.durationSeconds,
+            distance: e.distance,
             revision: e.revision,
             serverUpdatedAt: e.updatedAt.toISOString(),
             clientUpdatedAt: e.clientUpdatedAt?.toISOString() ?? null,

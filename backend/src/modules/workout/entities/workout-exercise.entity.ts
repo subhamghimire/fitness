@@ -4,6 +4,13 @@ import { Workout } from "./workout.entity";
 import { Exercise } from "../../exercise/entities/exercise.entity";
 import { Set } from "./set.entity";
 
+/**
+ * WORKOUT EXERCISE — an exercise actually performed during a workout session.
+ *
+ * `exercise_id` is a soft reference into the reusable exercise catalog. It is
+ * nullable so user history survives a catalog exercise being hard-deleted;
+ * `name` is the denormalized display name captured at sync time.
+ */
 @Entity("workout_exercises")
 export class WorkoutExercise extends AbstractEntity {
   @Index()
@@ -11,8 +18,8 @@ export class WorkoutExercise extends AbstractEntity {
   workoutId: string;
 
   @Index()
-  @Column({ name: "exercise_id", type: "uuid" })
-  exerciseId: string;
+  @Column({ name: "exercise_id", type: "uuid", nullable: true })
+  exerciseId: string | null;
 
   @Column({ name: "order_index", type: "int", default: 0 })
   orderIndex: number;
@@ -38,9 +45,9 @@ export class WorkoutExercise extends AbstractEntity {
   @JoinColumn({ name: "workout_id" })
   workout: Workout;
 
-  @ManyToOne(() => Exercise, { onDelete: "CASCADE" })
+  @ManyToOne(() => Exercise, { onDelete: "SET NULL", nullable: true })
   @JoinColumn({ name: "exercise_id" })
-  exercise: Exercise;
+  exercise: Exercise | null;
 
   @OneToMany(() => Set, (s) => s.workoutExercise, { cascade: true })
   sets: Set[];

@@ -19,30 +19,43 @@ import { DataSource, FindOperator, ObjectLiteral, Repository } from "typeorm";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { SyncService, MAX_BATCH_ITEMS } from "./sync.service";
-import { Workout } from "../workouts/entities/workout.entity";
-import { WorkoutExercise } from "../workouts/entities/workout-exercise.entity";
-import { Set } from "../workouts/entities/set.entity";
+import { Workout } from "../workout/entities/workout.entity";
+import { WorkoutExercise } from "../workout/entities/workout-exercise.entity";
+import { Set } from "../workout/entities/set.entity";
 import { Exercise } from "../exercise/entities/exercise.entity";
-import { UserTemplate } from "../workouts/entities/user-template.entity";
-import { UserTemplateExercise } from "../workouts/entities/user-template-exercise.entity";
-import { UserTemplateSet } from "../workouts/entities/user-template-set.entity";
+import { WorkoutTemplate } from "../workout/entities/workout-template.entity";
+import { WorkoutTemplateExercise } from "../workout/entities/workout-template-exercise.entity";
+import { WorkoutTemplateSet } from "../workout/entities/workout-template-set.entity";
+import { WorkoutService } from "../workout/workout.service";
+import { WorkoutTemplateService } from "../workout/workout-template.service";
+import { ExerciseService } from "../exercise/exercise.service";
+import { ConfigService } from "@nestjs/config";
 import { UserSyncState } from "./entities/user-sync-state.entity";
 import { SyncChange } from "./entities/sync-change.entity";
 import { SyncBatchRequestDto, SyncBatchChangesDto, SyncChangeItemDto } from "./dto/sync-batch.dto";
 import { User } from "../users/entities/user.entity";
 
-type TableKey = "workouts" | "workout_exercises" | "sets" | "user_templates" | "user_template_exercises" | "user_template_sets" | "user_sync_state" | "sync_changes" | "exercises";
+type TableKey =
+  | "workouts"
+  | "workout_exercises"
+  | "sets"
+  | "workout_templates"
+  | "workout_template_exercises"
+  | "workout_template_sets"
+  | "user_sync_state"
+  | "sync_changes"
+  | "exercises";
 
-type AnyEntity = Workout | WorkoutExercise | Set | UserTemplate | UserTemplateExercise | UserTemplateSet | UserSyncState | SyncChange | Exercise;
+type AnyEntity = Workout | WorkoutExercise | Set | WorkoutTemplate | WorkoutTemplateExercise | WorkoutTemplateSet | UserSyncState | SyncChange | Exercise;
 type Row = Record<string, unknown>;
 
 const OWN_ALIAS: Record<TableKey, string> = {
   workouts: "w",
   workout_exercises: "we",
   sets: "s",
-  user_templates: "t",
-  user_template_exercises: "te",
-  user_template_sets: "ts",
+  workout_templates: "t",
+  workout_template_exercises: "te",
+  workout_template_sets: "ts",
   sync_changes: "sc",
   exercises: "ex",
   user_sync_state: "us"
@@ -64,9 +77,9 @@ interface TableStore {
   workouts: Map<string, Workout>;
   workout_exercises: Map<string, WorkoutExercise>;
   sets: Map<string, Set>;
-  user_templates: Map<string, UserTemplate>;
-  user_template_exercises: Map<string, UserTemplateExercise>;
-  user_template_sets: Map<string, UserTemplateSet>;
+  workout_templates: Map<string, WorkoutTemplate>;
+  workout_template_exercises: Map<string, WorkoutTemplateExercise>;
+  workout_template_sets: Map<string, WorkoutTemplateSet>;
   user_sync_state: Map<string, UserSyncState>;
   sync_changes: Map<string, SyncChange>;
   exercises: Map<string, Exercise>;
@@ -83,9 +96,9 @@ function createMemoryDb(): MemoryDb {
       workouts: new Map(),
       workout_exercises: new Map(),
       sets: new Map(),
-      user_templates: new Map(),
-      user_template_exercises: new Map(),
-      user_template_sets: new Map(),
+      workout_templates: new Map(),
+      workout_template_exercises: new Map(),
+      workout_template_sets: new Map(),
       user_sync_state: new Map(),
       sync_changes: new Map(),
       exercises: new Map()
@@ -102,12 +115,12 @@ function tableStore(tables: TableStore, key: TableKey): Map<string, AnyEntity> {
       return tables.workout_exercises as unknown as Map<string, AnyEntity>;
     case "sets":
       return tables.sets as unknown as Map<string, AnyEntity>;
-    case "user_templates":
-      return tables.user_templates as unknown as Map<string, AnyEntity>;
-    case "user_template_exercises":
-      return tables.user_template_exercises as unknown as Map<string, AnyEntity>;
-    case "user_template_sets":
-      return tables.user_template_sets as unknown as Map<string, AnyEntity>;
+    case "workout_templates":
+      return tables.workout_templates as unknown as Map<string, AnyEntity>;
+    case "workout_template_exercises":
+      return tables.workout_template_exercises as unknown as Map<string, AnyEntity>;
+    case "workout_template_sets":
+      return tables.workout_template_sets as unknown as Map<string, AnyEntity>;
     case "user_sync_state":
       return tables.user_sync_state as unknown as Map<string, AnyEntity>;
     case "sync_changes":
@@ -125,9 +138,9 @@ function tableFor(EC: unknown): TableKey {
   if (EC === Workout) return "workouts";
   if (EC === WorkoutExercise) return "workout_exercises";
   if (EC === Set) return "sets";
-  if (EC === UserTemplate) return "user_templates";
-  if (EC === UserTemplateExercise) return "user_template_exercises";
-  if (EC === UserTemplateSet) return "user_template_sets";
+  if (EC === WorkoutTemplate) return "workout_templates";
+  if (EC === WorkoutTemplateExercise) return "workout_template_exercises";
+  if (EC === WorkoutTemplateSet) return "workout_template_sets";
   if (EC === UserSyncState) return "user_sync_state";
   if (EC === SyncChange) return "sync_changes";
   if (EC === Exercise) return "exercises";
@@ -384,22 +397,38 @@ function makeDataSource(db: MemoryDb) {
 
 function makeService(db: MemoryDb): { service: SyncService; dataSource: DataSource; accounting: ConnectionAccounting } {
   const { dataSource, accounting } = makeDataSource(db);
-  const service = new SyncService(
-    noRepo<Workout>(),
-    noRepo<WorkoutExercise>(),
-    noRepo<Set>(),
-    noRepo<UserTemplate>(),
-    noRepo<UserTemplateExercise>(),
-    noRepo<UserTemplateSet>(),
-    noRepo<UserSyncState>(),
-    noRepo<SyncChange>(),
-    dataSource
-  );
+  const service = new SyncService(noRepo<UserSyncState>(), noRepo<SyncChange>(), dataSource, makeWorkoutService(), makeWorkoutTemplateService());
   return { service, dataSource, accounting };
 }
 
 function noRepo<T extends ObjectLiteral>(): Repository<T> {
   return {} as unknown as Repository<T>;
+}
+
+function makeWorkoutService(): WorkoutService {
+  const exerciseService = new ExerciseService(exerciseRepo(), {} as unknown as never, {} as unknown as ConfigService);
+  return new WorkoutService(noRepo<Workout>(), noRepo<WorkoutExercise>(), noRepo<Set>(), noRepo<Exercise>(), exerciseService);
+}
+
+function exerciseRepo(): Repository<Exercise> {
+  return { create: (data: Row) => ({ ...data }) } as unknown as Repository<Exercise>;
+}
+
+function makeWorkoutTemplateService(): WorkoutTemplateService {
+  return new WorkoutTemplateService(noRepo<WorkoutTemplate>(), noRepo<WorkoutTemplateExercise>(), noRepo<WorkoutTemplateSet>(), noRepo<Exercise>(), noRepo<SyncChange>());
+}
+
+function seedExercise(db: MemoryDb, id: string, over: Partial<Exercise> = {}): void {
+  db.tables.exercises.set(id, {
+    id,
+    title: id === "ex-squat" ? "Squat" : "Exercise",
+    slug: id,
+    description: null,
+    isDeleted: false,
+    deletedAt: null,
+    deletedBy: null,
+    ...over
+  } as Exercise);
 }
 
 const userA = { id: "aaaa", email: "a@test.com" } as User;
@@ -512,6 +541,7 @@ describe("Scenario 1 — multi-device offline creates survive", () => {
 
   it("full workout trees (workout + exercises + sets) from both devices survive", async () => {
     const db = createMemoryDb();
+    seedExercise(db, "ex-squat");
     const { service } = makeService(db);
 
     const buildTree = (prefix: string, ts: string): { workouts: SyncChangeItemDto[]; workoutExercises: SyncChangeItemDto[]; sets: SyncChangeItemDto[] } => ({
@@ -793,17 +823,7 @@ describe("Scenario 5 — partial failure then retry stays idempotent", () => {
       return qr;
     };
 
-    const service = new SyncService(
-      noRepo<Workout>(),
-      noRepo<WorkoutExercise>(),
-      noRepo<Set>(),
-      noRepo<UserTemplate>(),
-      noRepo<UserTemplateExercise>(),
-      noRepo<UserTemplateSet>(),
-      noRepo<UserSyncState>(),
-      noRepo<SyncChange>(),
-      dataSource
-    );
+    const service = new SyncService(noRepo<UserSyncState>(), noRepo<SyncChange>(), dataSource, makeWorkoutService(), makeWorkoutTemplateService());
 
     armed = true;
     const dto = pushRequest(
@@ -1052,6 +1072,7 @@ describe("Scenario 8 — unauthorized entity submission is rejected", () => {
   it("rejects a workoutExercise when the parent workout belongs to another user", async () => {
     const db = createMemoryDb();
     seedWorkout(db, "wB", { userId: userB.id });
+    seedExercise(db, "ex1");
     db.tables.workout_exercises.set("weB", {
       id: "weB",
       workoutId: "wB",
@@ -1095,6 +1116,7 @@ describe("Scenario 8 — unauthorized entity submission is rejected", () => {
   it("rejects a set chained to another user's workout through its exercise", async () => {
     const db = createMemoryDb();
     seedWorkout(db, "wB", { userId: userB.id });
+    seedExercise(db, "ex1");
     db.tables.workout_exercises.set("weB", {
       id: "weB",
       workoutId: "wB",
@@ -1274,6 +1296,147 @@ describe("Concurrent database operations", () => {
     expect(accounting.rolledBack).toBe(0);
     expect(accounting.releases).toBe(25);
     expect(accounting.activeTransactions).toBe(0);
+  });
+});
+
+// ─── Scenario 9: offline-created workout + children sync end-to-end (client wire format) ─
+
+describe("Scenario 9 — offline-created workout syncs end-to-end (client wire format)", () => {
+  /**
+   * These payloads mirror EXACTLY what the React Native client sends from
+   * `collectDirtyChanges`:
+   *   • workout payload carries name/notes/startedAt/endedAt/status/…
+   *   • workoutExercise payload has NO `exerciseId` – the backend must
+   *     findOrCreateCustomExercise by `name`
+   *   • set payload carries only the strength fields the client tracks.
+   */
+  function buildOfflinePush(prefix: string, ts: string): SyncBatchRequestDto {
+    return {
+      lastSyncRevision: 0,
+      clientId: DEVICE_A,
+      changes: {
+        workouts: [
+          item({
+            id: `${prefix}-w`,
+            revision: 2,
+            clientUpdatedAt: ts,
+            payload: {
+              id: `${prefix}-w`,
+              name: "Offline Push",
+              notes: null,
+              startedAt: "2026-02-01T07:00:00.000Z",
+              endedAt: "2026-02-01T09:00:00.000Z",
+              status: "completed",
+              revision: 2,
+              clientUpdatedAt: ts,
+              deletedAt: null
+            }
+          })
+        ],
+        workoutExercises: [
+          item({
+            id: `${prefix}-we`,
+            revision: 1,
+            clientUpdatedAt: ts,
+            payload: {
+              id: `${prefix}-we`,
+              workoutId: `${prefix}-w`,
+              name: "Bench Press",
+              orderIndex: 0,
+              notes: null,
+              restSeconds: 90,
+              revision: 1,
+              clientUpdatedAt: ts,
+              deletedAt: null
+            }
+          })
+        ],
+        sets: [
+          item({
+            id: `${prefix}-s`,
+            revision: 1,
+            clientUpdatedAt: ts,
+            payload: {
+              id: `${prefix}-s`,
+              workoutExerciseId: `${prefix}-we`,
+              orderIndex: 0,
+              weight: 100,
+              reps: 5,
+              isWarmup: false,
+              isDropset: false,
+              isFailure: false,
+              revision: 1,
+              clientUpdatedAt: ts,
+              deletedAt: null
+            }
+          })
+        ],
+        templates: [],
+        templateExercises: [],
+        templateSets: []
+      }
+    };
+  }
+
+  it("accepts an offline-created workout tree (name-based custom exercise) with zero rejections", async () => {
+    const db = createMemoryDb();
+    const { service } = makeService(db);
+
+    const res = await service.syncBatch(buildOfflinePush("o", "2026-02-01T09:00:00.000Z"), userA);
+
+    expect(res.rejected).toEqual([]);
+    expect(res.accepted.map((a) => a.id).sort()).toEqual(["o-s", "o-w", "o-we"]);
+    expect(db.tables.workouts.get("o-w")!.name).toBe("Offline Push");
+    expect(db.tables.workout_exercises.get("o-we")!.name).toBe("Bench Press");
+    expect(db.tables.workout_exercises.get("o-we")!.exerciseId).not.toBeNull();
+    expect(db.tables.sets.get("o-s")!.weight).toBe(100);
+    expect(db.tables.sets.get("o-s")!.reps).toBe(5);
+  });
+
+  it("pushes a local workout back to the creating device AND to another device via incremental pull", async () => {
+    const db = createMemoryDb();
+    const { service } = makeService(db);
+
+    // Device B has synced before, so it pulls incrementally from a non-zero cursor.
+    const baseline = await service.syncBatch(
+      {
+        lastSyncRevision: 0,
+        clientId: DEVICE_B,
+        changes: { workouts: [], workoutExercises: [], sets: [], templates: [], templateExercises: [], templateSets: [] }
+      },
+      userA
+    );
+    const cursorB = baseline.syncRevision;
+
+    // Device A pushes its offline-created tree.
+    const push = await service.syncBatch(buildOfflinePush("x", "2026-02-02T09:00:00.000Z"), userA);
+    expect(push.rejected).toEqual([]);
+
+    // Device A immediately pulls it back (same cursor it started from).
+    const pullA = await service.syncBatch(
+      {
+        lastSyncRevision: 0,
+        clientId: DEVICE_A,
+        changes: { workouts: [], workoutExercises: [], sets: [], templates: [], templateExercises: [], templateSets: [] }
+      },
+      userA
+    );
+    expect(pullA.serverChanges.workouts.some((w) => w.id === "x-w")).toBe(true);
+
+    // Device B receives it in an incremental pull, including its children.
+    const pullB = await service.syncBatch(
+      {
+        lastSyncRevision: cursorB,
+        clientId: DEVICE_B,
+        changes: { workouts: [], workoutExercises: [], sets: [], templates: [], templateExercises: [], templateSets: [] }
+      },
+      userA
+    );
+    expect(pullB.serverChanges.workouts.map((w) => w.id)).toContain("x-w");
+    expect(pullB.serverChanges.workoutExercises.map((w) => w.id)).toContain("x-we");
+    expect(pullB.serverChanges.sets.map((s) => s.id)).toContain("x-s");
+    const xw = pullB.serverChanges.workouts.find((w) => w.id === "x-w");
+    expect(xw?.payload).toMatchObject({ name: "Offline Push", startedAt: "2026-02-01T07:00:00.000Z" });
   });
 });
 

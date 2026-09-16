@@ -1,20 +1,33 @@
 import { DataSource, FindOperator, ObjectLiteral, Repository } from "typeorm";
 import { SyncService } from "./sync.service";
-import { Workout } from "../workouts/entities/workout.entity";
-import { WorkoutExercise } from "../workouts/entities/workout-exercise.entity";
-import { Set } from "../workouts/entities/set.entity";
+import { Workout } from "../workout/entities/workout.entity";
+import { WorkoutExercise } from "../workout/entities/workout-exercise.entity";
+import { Set } from "../workout/entities/set.entity";
 import { Exercise } from "../exercise/entities/exercise.entity";
-import { UserTemplate } from "../workouts/entities/user-template.entity";
-import { UserTemplateExercise } from "../workouts/entities/user-template-exercise.entity";
-import { UserTemplateSet } from "../workouts/entities/user-template-set.entity";
+import { WorkoutTemplate } from "../workout/entities/workout-template.entity";
+import { WorkoutTemplateExercise } from "../workout/entities/workout-template-exercise.entity";
+import { WorkoutTemplateSet } from "../workout/entities/workout-template-set.entity";
+import { WorkoutService } from "../workout/workout.service";
+import { WorkoutTemplateService } from "../workout/workout-template.service";
+import { ExerciseService } from "../exercise/exercise.service";
+import { ConfigService } from "@nestjs/config";
 import { UserSyncState } from "./entities/user-sync-state.entity";
 import { SyncChange } from "./entities/sync-change.entity";
 import { SyncBatchRequestDto, SyncBatchChangesDto, SyncChangeItemDto } from "./dto/sync-batch.dto";
 import { User } from "../users/entities/user.entity";
 
-type TableKey = "workouts" | "workout_exercises" | "sets" | "user_templates" | "user_template_exercises" | "user_template_sets" | "user_sync_state" | "sync_changes" | "exercises";
+type TableKey =
+  | "workouts"
+  | "workout_exercises"
+  | "sets"
+  | "workout_templates"
+  | "workout_template_exercises"
+  | "workout_template_sets"
+  | "user_sync_state"
+  | "sync_changes"
+  | "exercises";
 
-type AnyEntity = Workout | WorkoutExercise | Set | UserTemplate | UserTemplateExercise | UserTemplateSet | UserSyncState | SyncChange | Exercise;
+type AnyEntity = Workout | WorkoutExercise | Set | WorkoutTemplate | WorkoutTemplateExercise | WorkoutTemplateSet | UserSyncState | SyncChange | Exercise;
 
 /** A stored row, read/written through an index-signature view of the entity. */
 type Row = Record<string, unknown>;
@@ -23,9 +36,9 @@ const OWN_ALIAS: Record<TableKey, string> = {
   workouts: "w",
   workout_exercises: "we",
   sets: "s",
-  user_templates: "t",
-  user_template_exercises: "te",
-  user_template_sets: "ts",
+  workout_templates: "t",
+  workout_template_exercises: "te",
+  workout_template_sets: "ts",
   sync_changes: "sc",
   exercises: "ex",
   user_sync_state: "us"
@@ -47,9 +60,9 @@ interface TableStore {
   workouts: Map<string, Workout>;
   workout_exercises: Map<string, WorkoutExercise>;
   sets: Map<string, Set>;
-  user_templates: Map<string, UserTemplate>;
-  user_template_exercises: Map<string, UserTemplateExercise>;
-  user_template_sets: Map<string, UserTemplateSet>;
+  workout_templates: Map<string, WorkoutTemplate>;
+  workout_template_exercises: Map<string, WorkoutTemplateExercise>;
+  workout_template_sets: Map<string, WorkoutTemplateSet>;
   user_sync_state: Map<string, UserSyncState>;
   sync_changes: Map<string, SyncChange>;
   exercises: Map<string, Exercise>;
@@ -66,9 +79,9 @@ function createMemoryDb(): MemoryDb {
       workouts: new Map(),
       workout_exercises: new Map(),
       sets: new Map(),
-      user_templates: new Map(),
-      user_template_exercises: new Map(),
-      user_template_sets: new Map(),
+      workout_templates: new Map(),
+      workout_template_exercises: new Map(),
+      workout_template_sets: new Map(),
       user_sync_state: new Map(),
       sync_changes: new Map(),
       exercises: new Map()
@@ -86,12 +99,12 @@ function tableStore(tables: TableStore, key: TableKey): Map<string, AnyEntity> {
       return tables.workout_exercises as unknown as Map<string, AnyEntity>;
     case "sets":
       return tables.sets as unknown as Map<string, AnyEntity>;
-    case "user_templates":
-      return tables.user_templates as unknown as Map<string, AnyEntity>;
-    case "user_template_exercises":
-      return tables.user_template_exercises as unknown as Map<string, AnyEntity>;
-    case "user_template_sets":
-      return tables.user_template_sets as unknown as Map<string, AnyEntity>;
+    case "workout_templates":
+      return tables.workout_templates as unknown as Map<string, AnyEntity>;
+    case "workout_template_exercises":
+      return tables.workout_template_exercises as unknown as Map<string, AnyEntity>;
+    case "workout_template_sets":
+      return tables.workout_template_sets as unknown as Map<string, AnyEntity>;
     case "user_sync_state":
       return tables.user_sync_state as unknown as Map<string, AnyEntity>;
     case "sync_changes":
@@ -109,9 +122,9 @@ function tableFor(EC: unknown): TableKey {
   if (EC === Workout) return "workouts";
   if (EC === WorkoutExercise) return "workout_exercises";
   if (EC === Set) return "sets";
-  if (EC === UserTemplate) return "user_templates";
-  if (EC === UserTemplateExercise) return "user_template_exercises";
-  if (EC === UserTemplateSet) return "user_template_sets";
+  if (EC === WorkoutTemplate) return "workout_templates";
+  if (EC === WorkoutTemplateExercise) return "workout_template_exercises";
+  if (EC === WorkoutTemplateSet) return "workout_template_sets";
   if (EC === UserSyncState) return "user_sync_state";
   if (EC === SyncChange) return "sync_changes";
   if (EC === Exercise) return "exercises";
@@ -361,22 +374,25 @@ function makeService(db: MemoryDb): { service: SyncService; manager: MockManager
     release: jest.fn(() => Promise.resolve())
   };
   const dataSource = { createQueryRunner: () => qr } as unknown as DataSource;
-  const service = new SyncService(
-    noRepo<Workout>(),
-    noRepo<WorkoutExercise>(),
-    noRepo<Set>(),
-    noRepo<UserTemplate>(),
-    noRepo<UserTemplateExercise>(),
-    noRepo<UserTemplateSet>(),
-    noRepo<UserSyncState>(),
-    noRepo<SyncChange>(),
-    dataSource
-  );
+  const service = new SyncService(noRepo<UserSyncState>(), noRepo<SyncChange>(), dataSource, makeWorkoutService(), makeWorkoutTemplateService());
   return { service, manager, qr };
 }
 
 function noRepo<T extends ObjectLiteral>(): Repository<T> {
   return {} as unknown as Repository<T>;
+}
+
+function makeWorkoutService(): WorkoutService {
+  const exerciseService = new ExerciseService(exerciseRepo(), {} as unknown as never, {} as unknown as ConfigService);
+  return new WorkoutService(noRepo<Workout>(), noRepo<WorkoutExercise>(), noRepo<Set>(), noRepo<Exercise>(), exerciseService);
+}
+
+function exerciseRepo(): Repository<Exercise> {
+  return { create: (data: Row) => ({ ...data }) } as unknown as Repository<Exercise>;
+}
+
+function makeWorkoutTemplateService(): WorkoutTemplateService {
+  return new WorkoutTemplateService(noRepo<WorkoutTemplate>(), noRepo<WorkoutTemplateExercise>(), noRepo<WorkoutTemplateSet>(), noRepo<Exercise>(), noRepo<SyncChange>());
 }
 
 const userA = { id: "aaaa", email: "a@test.com" } as User;
@@ -804,12 +820,15 @@ describe("SyncService sync scenarios", () => {
     it("full initial sync returns every entity for the user", async () => {
       const db = createMemoryDb();
       seedWorkout(db);
-      db.tables.user_template_exercises.set("te1", {
+      db.tables.workout_template_exercises.set("te1", {
         id: "te1",
         templateId: "t-plate",
         userId: userA.id,
         name: "Squat",
         orderIndex: 0,
+        exerciseId: null,
+        notes: null,
+        restSeconds: null,
         revision: 1,
         clientUpdatedAt: new Date("2026-01-01T00:00:00.000Z"),
         updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -817,8 +836,8 @@ describe("SyncService sync scenarios", () => {
         isDeleted: false,
         deletedAt: null,
         deletedBy: null
-      } as UserTemplateExercise);
-      db.tables.user_templates.set("t-plate", {
+      } as WorkoutTemplateExercise);
+      db.tables.workout_templates.set("t-plate", {
         id: "t-plate",
         userId: userA.id,
         name: "A",
@@ -829,7 +848,7 @@ describe("SyncService sync scenarios", () => {
         isDeleted: false,
         deletedAt: null,
         deletedBy: null
-      } as UserTemplate);
+      } as WorkoutTemplate);
 
       const { service } = makeService(db);
       const res = await service.syncBatch(pushRequest([], 0), userA);
@@ -919,17 +938,7 @@ describe("SyncService sync scenarios", () => {
         return originalFindOne(EC, opts);
       };
       const dataSource = { createQueryRunner: () => qr } as unknown as DataSource;
-      const service = new SyncService(
-        noRepo<Workout>(),
-        noRepo<WorkoutExercise>(),
-        noRepo<Set>(),
-        noRepo<UserTemplate>(),
-        noRepo<UserTemplateExercise>(),
-        noRepo<UserTemplateSet>(),
-        noRepo<UserSyncState>(),
-        noRepo<SyncChange>(),
-        dataSource
-      );
+      const service = new SyncService(noRepo<UserSyncState>(), noRepo<SyncChange>(), dataSource, makeWorkoutService(), makeWorkoutTemplateService());
 
       await expect(service.syncBatch(pushRequest([item({ id: "w1", revision: 1, payload: workoutPayload() })]), userA)).rejects.toThrow("boom");
       expect(qr.rollbackTransaction).toHaveBeenCalled();

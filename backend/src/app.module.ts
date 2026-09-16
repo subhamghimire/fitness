@@ -11,7 +11,8 @@ import { CoachDocumentModule } from "./modules/coach-document/coach-document.mod
 import { CoachTemplateModule } from "./modules/coach-template/coach-template.module";
 import { CoachRatingModule } from "./modules/coach-rating/coach-rating.module";
 import { ExerciseModule } from "./modules/exercise/exercise.module";
-import { UserWorkoutModule } from "./modules/user-workout/user-workout.module";
+import { FavoriteExerciseModule } from "./modules/favorite-exercise/favorite-exercise.module";
+import { WorkoutModule } from "./modules/workout/workout.module";
 import { FilesModule } from "./modules/files/files.module";
 import { UserModule } from "./modules/users/user.module";
 import { HealthController } from "./common/health.controller";
@@ -34,7 +35,8 @@ import { HealthController } from "./common/health.controller";
     CoachTemplateModule,
     CoachRatingModule,
     ExerciseModule,
-    UserWorkoutModule,
+    FavoriteExerciseModule,
+    WorkoutModule,
     FilesModule,
     UserModule
   ],

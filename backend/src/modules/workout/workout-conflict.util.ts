@@ -1,16 +1,13 @@
 /**
- * Shared server-side LWW helpers (mirrors mobile sync/conflict.ts).
+ * Domain conflict resolution for syncable fitness entities (offline-first).
  *
- * Conflict resolution uses the CLIENT mutation timestamp for both sides,
- * never the server receive time.
+ * Uses the CLIENT mutation timestamp for both sides, never the server receive
+ * time. Owned by the workout domain because every syncable fitness entity
+ * resolves writes through these rules.
  *
  *   incomingClientUpdatedAt  – from the push request (what the client last touched)
  *   existingClientUpdatedAt  – stored on the entity from the last accepted push;
  *                               falls back to updatedAt for pre-migration rows
- *
- * Pre-migration rows have no clientUpdatedAt yet; the caller passes
- * `entity.clientUpdatedAt ?? entity.updatedAt` so the comparison degrades
- * gracefully to the old behaviour for legacy data.
  */
 export function resolveWinner(
   incomingClientUpdatedAt: string | Date | null | undefined,

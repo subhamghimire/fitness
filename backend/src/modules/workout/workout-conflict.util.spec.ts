@@ -1,4 +1,4 @@
-import { resolveWinner, isIdempotentReplay } from "./sync-conflict.util";
+import { resolveWinner, isIdempotentReplay } from "./workout-conflict.util";
 
 describe("sync conflict resolution", () => {
   // ── LWW by client mutation time ──────────────────────────────────────────

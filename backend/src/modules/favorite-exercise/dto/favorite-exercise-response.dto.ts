@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { PaginatedResponseDto, PaginationMeta } from "src/common/dto";
 
-export class UserWorkoutResponseDto {
+export class FavoriteExerciseResponseDto {
   @ApiProperty()
   id: string;
 
@@ -28,9 +28,9 @@ export class UserWorkoutResponseDto {
   };
 }
 
-export class PaginatedUserWorkoutResponseDto extends PaginatedResponseDto<UserWorkoutResponseDto> {
-  @ApiProperty({ type: [UserWorkoutResponseDto] })
-  declare data: UserWorkoutResponseDto[];
+export class PaginatedFavoriteExerciseResponseDto extends PaginatedResponseDto<FavoriteExerciseResponseDto> {
+  @ApiProperty({ type: [FavoriteExerciseResponseDto] })
+  declare data: FavoriteExerciseResponseDto[];
 
   @ApiProperty({ type: PaginationMeta })
   declare pagination: PaginationMeta;

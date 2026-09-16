@@ -1,9 +1,12 @@
 import { Entity, Column, Index, ManyToOne, JoinColumn } from "typeorm";
 import { AbstractEntity } from "src/entities";
-import { UserTemplateExercise } from "./user-template-exercise.entity";
+import { WorkoutTemplateExercise } from "./workout-template-exercise.entity";
 
-@Entity("user_template_sets")
-export class UserTemplateSet extends AbstractEntity {
+/**
+ * SET — an individual planned set inside a workout template exercise.
+ */
+@Entity("workout_template_sets")
+export class WorkoutTemplateSet extends AbstractEntity {
   @Index()
   @Column({ name: "template_exercise_id", type: "uuid" })
   templateExerciseId: string;
@@ -20,6 +23,9 @@ export class UserTemplateSet extends AbstractEntity {
   @Column({ type: "int", nullable: true })
   reps: number | null;
 
+  @Column({ type: "int", nullable: true })
+  rpe: number | null;
+
   @Column({ name: "is_warmup", type: "boolean", default: false })
   isWarmup: boolean;
 
@@ -29,6 +35,12 @@ export class UserTemplateSet extends AbstractEntity {
   @Column({ name: "is_failure", type: "boolean", default: false })
   isFailure: boolean;
 
+  @Column({ name: "duration_seconds", type: "int", nullable: true })
+  durationSeconds: number | null;
+
+  @Column({ type: "float", nullable: true })
+  distance: number | null;
+
   @Column({ type: "int", default: 1 })
   revision: number;
 
@@ -36,7 +48,7 @@ export class UserTemplateSet extends AbstractEntity {
   @Column({ name: "client_updated_at", type: "timestamptz", nullable: true })
   clientUpdatedAt: Date | null;
 
-  @ManyToOne(() => UserTemplateExercise, (e) => e.sets, { onDelete: "CASCADE" })
+  @ManyToOne(() => WorkoutTemplateExercise, (e) => e.sets, { onDelete: "CASCADE" })
   @JoinColumn({ name: "template_exercise_id" })
-  templateExercise: UserTemplateExercise;
+  templateExercise: WorkoutTemplateExercise;
 }
