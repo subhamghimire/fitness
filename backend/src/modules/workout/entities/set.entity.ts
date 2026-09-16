@@ -2,6 +2,12 @@ import { Entity, Column, ManyToOne, JoinColumn, Index } from "typeorm";
 import { WorkoutExercise } from "./workout-exercise.entity";
 import { AbstractEntity } from "src/entities";
 
+/**
+ * SET — an individual performed set within a workout session.
+ *
+ * Supports both strength (weight/reps/RPE, failure/dropset/warmup flags) and
+ * conditioning (duration/distance) set types.
+ */
 @Entity("sets")
 export class Set extends AbstractEntity {
   @Index()
