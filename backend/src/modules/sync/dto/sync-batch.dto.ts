@@ -1,5 +1,7 @@
-import { IsUUID, IsOptional, IsNumber, IsArray, ValidateNested, IsIn, IsDateString, ValidateIf, Min, IsInt } from "class-validator";
+import { IsUUID, IsOptional, IsNumber, IsArray, ValidateNested, IsIn, IsDateString, ValidateIf, Min, IsInt, MaxLength } from "class-validator";
 import { Type } from "class-transformer";
+
+const MAX_ARRAY_SIZE = 500;
 
 export class SyncChangeItemDto {
   @IsIn(["upsert", "delete"])
@@ -24,36 +26,42 @@ export class SyncBatchChangesDto {
   @ValidateNested({ each: true })
   @Type(() => SyncChangeItemDto)
   @IsOptional()
+  @MaxLength(MAX_ARRAY_SIZE)
   workouts?: SyncChangeItemDto[];
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SyncChangeItemDto)
   @IsOptional()
+  @MaxLength(MAX_ARRAY_SIZE)
   workoutExercises?: SyncChangeItemDto[];
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SyncChangeItemDto)
   @IsOptional()
+  @MaxLength(MAX_ARRAY_SIZE)
   sets?: SyncChangeItemDto[];
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SyncChangeItemDto)
   @IsOptional()
+  @MaxLength(MAX_ARRAY_SIZE)
   templates?: SyncChangeItemDto[];
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SyncChangeItemDto)
   @IsOptional()
+  @MaxLength(MAX_ARRAY_SIZE)
   templateExercises?: SyncChangeItemDto[];
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SyncChangeItemDto)
   @IsOptional()
+  @MaxLength(MAX_ARRAY_SIZE)
   templateSets?: SyncChangeItemDto[];
 }
 

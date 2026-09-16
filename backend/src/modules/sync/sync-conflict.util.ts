@@ -36,8 +36,21 @@ export function resolveWinner(
   return "server";
 }
 
-export function isIdempotentReplay(existingRevision: number | null | undefined, incomingRevision: number): boolean {
-  return existingRevision != null && existingRevision === incomingRevision;
+export function isIdempotentReplay(
+  existingRevision: number | null | undefined,
+  incomingRevision: number,
+  existingClientUpdatedAt?: string | Date | null,
+  incomingClientUpdatedAt?: string | Date | null
+): boolean {
+  if (existingRevision == null || existingRevision !== incomingRevision) return false;
+  // Same revision number alone is insufficient: two different devices can
+  // independently bump a shared entity to the same revision and then diverge.
+  // Only treat the push as a replay of the very same logical mutation when the
+  // client mutation timestamp also matches the one the server already has.
+  if (existingClientUpdatedAt != null || incomingClientUpdatedAt != null) {
+    return toMs(existingClientUpdatedAt) === toMs(incomingClientUpdatedAt);
+  }
+  return true;
 }
 
 function toMs(v: string | Date | null | undefined): number {

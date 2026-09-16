@@ -77,6 +77,16 @@ describe("sync conflict resolution", () => {
     expect(isIdempotentReplay(undefined, 1)).toBe(false);
   });
 
+  it("same revision with the same logical mutation time is a replay", () => {
+    expect(isIdempotentReplay(3, 3, new Date("2026-01-02T00:00:00.000Z"), "2026-01-02T00:00:00.000Z")).toBe(true);
+  });
+
+  it("same revision but a different mutation time is NOT an idempotent replay", () => {
+    // Two devices independently bump a shared entity to revision 3; the timestamps
+    // differ, so this is a real divergence and must surface as a conflict.
+    expect(isIdempotentReplay(3, 3, new Date("2026-01-02T00:00:00.000Z"), "2026-01-03T00:00:00.000Z")).toBe(false);
+  });
+
   // ── Late / out-of-order ──────────────────────────────────────────────────
 
   it("late push loses to already-accepted newer mutation", () => {
