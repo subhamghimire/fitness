@@ -2,7 +2,7 @@ const SYNC_COLS = `
   user_id TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  local_updated_at TEXT NOT NULL,
+  client_updated_at TEXT NOT NULL,
   server_updated_at TEXT,
   deleted_at TEXT,
   sync_status TEXT NOT NULL DEFAULT 'pending',
@@ -76,7 +76,7 @@ export const CREATE_TEMPLATE_SETS_TABLE = `CREATE TABLE IF NOT EXISTS template_s
 
 export const CREATE_SYNC_META_TABLE = `CREATE TABLE IF NOT EXISTS sync_meta (
   key TEXT PRIMARY KEY NOT NULL,
-  last_sync_token TEXT,
+  last_sync_revision INTEGER,
   last_successful_sync_at TEXT,
   last_attempted_sync_at TEXT,
   last_error TEXT,
@@ -119,4 +119,4 @@ DROP TABLE IF EXISTS workouts_local;
 DROP TABLE IF EXISTS sync_meta;
 `;
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;

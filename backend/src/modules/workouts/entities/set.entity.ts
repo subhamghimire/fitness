@@ -38,6 +38,10 @@ export class Set extends AbstractEntity {
   @Column({ type: "int", default: 1 })
   revision: number;
 
+  /** Logical time of the last client mutation; used for conflict resolution. */
+  @Column({ name: "client_updated_at", type: "timestamptz", nullable: true })
+  clientUpdatedAt: Date | null;
+
   @ManyToOne(() => WorkoutExercise, (we) => we.sets, { onDelete: "CASCADE" })
   @JoinColumn({ name: "workout_exercise_id" })
   workoutExercise: WorkoutExercise;

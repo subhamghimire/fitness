@@ -25,7 +25,7 @@ export interface SyncFields {
   userId: string | null;
   createdAt: string;
   updatedAt: string;
-  localUpdatedAt: string;
+  clientUpdatedAt: string;
   serverUpdatedAt: string | null;
   deletedAt: string | null;
   syncStatus: SyncStatus;
@@ -84,7 +84,7 @@ export interface WorkoutLocal {
   user_id: string | null;
   created_at: string;
   updated_at: string;
-  local_updated_at: string;
+  client_updated_at: string;
   server_updated_at: string | null;
   deleted_at: string | null;
   sync_status: string;
@@ -102,7 +102,7 @@ export interface ExerciseLocal {
   user_id: string | null;
   created_at: string;
   updated_at: string;
-  local_updated_at: string;
+  client_updated_at: string;
   server_updated_at: string | null;
   deleted_at: string | null;
   sync_status: string;
@@ -123,7 +123,7 @@ export interface SetLocal {
   user_id: string | null;
   created_at: string;
   updated_at: string;
-  local_updated_at: string;
+  client_updated_at: string;
   server_updated_at: string | null;
   deleted_at: string | null;
   sync_status: string;
@@ -164,7 +164,7 @@ export interface TemplateLocal {
   created_at: string;
   user_id: string | null;
   updated_at: string;
-  local_updated_at: string;
+  client_updated_at: string;
   server_updated_at: string | null;
   deleted_at: string | null;
   sync_status: string;
@@ -180,7 +180,7 @@ export interface TemplateExerciseLocal {
   user_id: string | null;
   created_at: string;
   updated_at: string;
-  local_updated_at: string;
+  client_updated_at: string;
   server_updated_at: string | null;
   deleted_at: string | null;
   sync_status: string;
@@ -200,7 +200,7 @@ export interface TemplateSetLocal {
   user_id: string | null;
   created_at: string;
   updated_at: string;
-  local_updated_at: string;
+  client_updated_at: string;
   server_updated_at: string | null;
   deleted_at: string | null;
   sync_status: string;
@@ -210,7 +210,7 @@ export interface TemplateSetLocal {
 
 export interface SyncMeta {
   key: string;
-  lastSyncToken: string | null;
+  lastSyncRevision: number | null;
   lastSuccessfulSyncAt: string | null;
   lastAttemptedSyncAt: string | null;
   lastError: string | null;
@@ -223,7 +223,7 @@ export interface SyncChangeItem {
   op: EntityOp;
   id: string;
   revision: number;
-  localUpdatedAt: string;
+  clientUpdatedAt: string;
   payload?: Record<string, unknown> | null;
 }
 
@@ -237,7 +237,7 @@ export interface SyncBatchChanges {
 }
 
 export interface SyncBatchRequest {
-  lastSyncToken: string | null;
+  lastSyncRevision: number | null;
   clientId: string;
   changes: SyncBatchChanges;
 }
@@ -265,7 +265,7 @@ export interface SyncConflictItem {
 }
 
 export interface SyncBatchResponse {
-  syncToken: string;
+  syncRevision: number;
   serverTime: string;
   accepted: SyncAcceptedItem[];
   rejected: SyncRejectedItem[];

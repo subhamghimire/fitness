@@ -146,7 +146,7 @@ class SyncService {
         loops += 1;
         const changes = await SyncRepository.collectDirty(200);
         const response = await syncApi.syncBatch({
-          lastSyncToken: meta.lastSyncToken,
+          lastSyncRevision: meta.lastSyncRevision,
           clientId,
           changes,
         });
@@ -160,7 +160,7 @@ class SyncService {
 
         lastConflicts = response.conflicts?.length ?? 0;
         await SyncRepository.updateMeta({
-          lastSyncToken: response.syncToken,
+          lastSyncRevision: response.syncRevision,
           lastSuccessfulSyncAt: response.serverTime,
           lastError: null,
         });

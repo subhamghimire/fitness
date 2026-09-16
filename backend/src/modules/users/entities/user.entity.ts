@@ -1,7 +1,7 @@
 import { Entity, Column, OneToMany, Index, OneToOne, JoinColumn } from "typeorm";
 import { Workout } from "../../workouts/entities/workout.entity";
 import { AbstractEntity } from "src/entities";
-import { Gender } from "../enums";
+import { Gender, UserRole } from "../enums";
 import { CoachRating } from "src/modules/coach-rating/entities/coach-rating.entity";
 import { UserWorkout } from "src/modules/user-workout/entities/user-workout.entity";
 import { Coach } from "src/modules/coach/entities/coach.entity";
@@ -31,6 +31,9 @@ export class User extends AbstractEntity {
 
   @Column({ name: "google_photo_url", type: "varchar", length: 500, nullable: true })
   googlePhotoUrl: string | null;
+
+  @Column({ type: "enum", enum: UserRole, default: UserRole.USER })
+  role: UserRole;
 
   @OneToMany(() => Workout, (w) => w.user)
   workouts: Workout[];

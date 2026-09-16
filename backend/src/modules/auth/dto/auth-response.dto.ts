@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 export class UserResponseDto {
   @ApiProperty()
@@ -24,13 +24,13 @@ export class UserResponseDto {
 }
 
 export class TokensResponseDto {
-  @ApiProperty({ description: 'Short-lived access token' })
+  @ApiProperty({ description: "Short-lived access token" })
   accessToken: string;
 
-  @ApiProperty({ description: 'Long-lived refresh token' })
+  @ApiProperty({ description: "Long-lived refresh token" })
   refreshToken: string;
 
-  @ApiProperty({ description: 'Access token expiry in seconds' })
+  @ApiProperty({ description: "Access token expiry in seconds" })
   expiresIn: number;
 }
 

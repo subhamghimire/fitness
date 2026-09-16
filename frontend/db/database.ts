@@ -12,7 +12,7 @@ const ALTER_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: 'workouts_local', column: 'user_id', ddl: 'TEXT' },
   { table: 'workouts_local', column: 'created_at', ddl: 'TEXT' },
   { table: 'workouts_local', column: 'updated_at', ddl: 'TEXT' },
-  { table: 'workouts_local', column: 'local_updated_at', ddl: 'TEXT' },
+  { table: 'workouts_local', column: 'client_updated_at', ddl: 'TEXT' },
   { table: 'workouts_local', column: 'server_updated_at', ddl: 'TEXT' },
   { table: 'workouts_local', column: 'deleted_at', ddl: 'TEXT' },
   { table: 'workouts_local', column: 'sync_status', ddl: "TEXT NOT NULL DEFAULT 'pending'" },
@@ -24,7 +24,7 @@ const ALTER_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: 'exercises_local', column: 'user_id', ddl: 'TEXT' },
   { table: 'exercises_local', column: 'created_at', ddl: 'TEXT' },
   { table: 'exercises_local', column: 'updated_at', ddl: 'TEXT' },
-  { table: 'exercises_local', column: 'local_updated_at', ddl: 'TEXT' },
+  { table: 'exercises_local', column: 'client_updated_at', ddl: 'TEXT' },
   { table: 'exercises_local', column: 'server_updated_at', ddl: 'TEXT' },
   { table: 'exercises_local', column: 'deleted_at', ddl: 'TEXT' },
   { table: 'exercises_local', column: 'sync_status', ddl: "TEXT NOT NULL DEFAULT 'pending'" },
@@ -39,7 +39,7 @@ const ALTER_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: 'sets_local', column: 'user_id', ddl: 'TEXT' },
   { table: 'sets_local', column: 'created_at', ddl: 'TEXT' },
   { table: 'sets_local', column: 'updated_at', ddl: 'TEXT' },
-  { table: 'sets_local', column: 'local_updated_at', ddl: 'TEXT' },
+  { table: 'sets_local', column: 'client_updated_at', ddl: 'TEXT' },
   { table: 'sets_local', column: 'server_updated_at', ddl: 'TEXT' },
   { table: 'sets_local', column: 'deleted_at', ddl: 'TEXT' },
   { table: 'sets_local', column: 'sync_status', ddl: "TEXT NOT NULL DEFAULT 'pending'" },
@@ -48,7 +48,7 @@ const ALTER_COLUMNS: { table: string; column: string; ddl: string }[] = [
 
   { table: 'templates_local', column: 'user_id', ddl: 'TEXT' },
   { table: 'templates_local', column: 'updated_at', ddl: 'TEXT' },
-  { table: 'templates_local', column: 'local_updated_at', ddl: 'TEXT' },
+  { table: 'templates_local', column: 'client_updated_at', ddl: 'TEXT' },
   { table: 'templates_local', column: 'server_updated_at', ddl: 'TEXT' },
   { table: 'templates_local', column: 'deleted_at', ddl: 'TEXT' },
   { table: 'templates_local', column: 'sync_status', ddl: "TEXT NOT NULL DEFAULT 'pending'" },
@@ -58,7 +58,7 @@ const ALTER_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: 'template_exercises_local', column: 'user_id', ddl: 'TEXT' },
   { table: 'template_exercises_local', column: 'created_at', ddl: 'TEXT' },
   { table: 'template_exercises_local', column: 'updated_at', ddl: 'TEXT' },
-  { table: 'template_exercises_local', column: 'local_updated_at', ddl: 'TEXT' },
+  { table: 'template_exercises_local', column: 'client_updated_at', ddl: 'TEXT' },
   { table: 'template_exercises_local', column: 'server_updated_at', ddl: 'TEXT' },
   { table: 'template_exercises_local', column: 'deleted_at', ddl: 'TEXT' },
   { table: 'template_exercises_local', column: 'sync_status', ddl: "TEXT NOT NULL DEFAULT 'pending'" },
@@ -69,13 +69,59 @@ const ALTER_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: 'template_sets_local', column: 'user_id', ddl: 'TEXT' },
   { table: 'template_sets_local', column: 'created_at', ddl: 'TEXT' },
   { table: 'template_sets_local', column: 'updated_at', ddl: 'TEXT' },
-  { table: 'template_sets_local', column: 'local_updated_at', ddl: 'TEXT' },
+  { table: 'template_sets_local', column: 'client_updated_at', ddl: 'TEXT' },
   { table: 'template_sets_local', column: 'server_updated_at', ddl: 'TEXT' },
   { table: 'template_sets_local', column: 'deleted_at', ddl: 'TEXT' },
   { table: 'template_sets_local', column: 'sync_status', ddl: "TEXT NOT NULL DEFAULT 'pending'" },
   { table: 'template_sets_local', column: 'revision', ddl: 'INTEGER NOT NULL DEFAULT 1' },
   { table: 'template_sets_local', column: 'last_synced_revision', ddl: 'INTEGER' },
 ];
+
+const SYNC_TABLES = [
+  'workouts_local',
+  'exercises_local',
+  'sets_local',
+  'templates_local',
+  'template_exercises_local',
+  'template_sets_local',
+];
+
+/** v2 DBs store the logical clock as `local_updated_at`; rename it in place. */
+async function migrateLegacyTimestampColumn(database: SQLite.SQLiteDatabase): Promise<void> {
+  for (const table of SYNC_TABLES) {
+    const cols = await database.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
+    const hasLegacy = cols.some((c) => c.name === 'local_updated_at');
+    const hasNew = cols.some((c) => c.name === 'client_updated_at');
+    if (!hasLegacy) continue;
+    if (hasNew) {
+      await database.runAsync(`ALTER TABLE ${table} DROP COLUMN local_updated_at`);
+    } else {
+      await database.runAsync(`ALTER TABLE ${table} RENAME COLUMN local_updated_at TO client_updated_at`);
+    }
+  }
+}
+
+/** v2 DBs store sync_meta cursor as `last_sync_token` (ISO string); migrate to numeric revision. */
+async function migrateLegacySyncMeta(database: SQLite.SQLiteDatabase): Promise<void> {
+  const cols = await database.getAllAsync<{ name: string }>(`PRAGMA table_info(sync_meta)`);
+  const hasLegacy = cols.some((c) => c.name === 'last_sync_token');
+  if (!hasLegacy) return;
+  const row = await database.getFirstAsync<{ key: string; last_sync_token: string | null }>(
+    `SELECT key, last_sync_token FROM sync_meta WHERE key = 'default'`
+  );
+
+  try {
+    await database.runAsync(`ALTER TABLE sync_meta RENAME COLUMN last_sync_token TO last_sync_revision`);
+    if (row) {
+      // No numeric revision exists in v2 data — reset to 0 so the client re-runs a full sync.
+      await database.runAsync(`UPDATE sync_meta SET last_sync_revision = 0 WHERE key = 'default'`);
+    }
+  } catch {
+    // Column may be referenced in a CHECK/VIEW on older SQLite; fall back to additive column.
+    await database.runAsync(`ALTER TABLE sync_meta ADD COLUMN last_sync_revision INTEGER`);
+    await database.runAsync(`UPDATE sync_meta SET last_sync_revision = 0 WHERE key = 'default'`);
+  }
+}
 
 async function tableHasColumn(
   database: SQLite.SQLiteDatabase,
@@ -120,14 +166,7 @@ async function backfillSyncMetadata(database: SQLite.SQLiteDatabase): Promise<vo
      WHERE status = 'active' AND (sync_status IS NULL OR sync_status = '')`
   );
 
-  const tables = [
-    'workouts_local',
-    'exercises_local',
-    'sets_local',
-    'templates_local',
-    'template_exercises_local',
-    'template_sets_local',
-  ];
+  const tables = SYNC_TABLES;
 
   for (const table of tables) {
     const timeSource =
@@ -141,10 +180,10 @@ async function backfillSyncMetadata(database: SQLite.SQLiteDatabase): Promise<vo
       `UPDATE ${table} SET
         created_at = COALESCE(created_at, ${timeSource}),
         updated_at = COALESCE(updated_at, ${timeSource}),
-        local_updated_at = COALESCE(local_updated_at, ${timeSource}),
+        client_updated_at = COALESCE(client_updated_at, ${timeSource}),
         sync_status = COALESCE(NULLIF(sync_status, ''), 'pending'),
         revision = COALESCE(revision, 1)
-       WHERE created_at IS NULL OR updated_at IS NULL OR local_updated_at IS NULL OR sync_status IS NULL OR sync_status = ''`
+       WHERE created_at IS NULL OR updated_at IS NULL OR client_updated_at IS NULL OR sync_status IS NULL OR sync_status = ''`
     );
   }
 
@@ -152,8 +191,8 @@ async function backfillSyncMetadata(database: SQLite.SQLiteDatabase): Promise<vo
   const meta = await database.getFirstAsync<{ key: string }>(`SELECT key FROM sync_meta WHERE key = 'default'`);
   if (!meta) {
     await database.runAsync(
-      `INSERT INTO sync_meta (key, last_sync_token, last_successful_sync_at, last_attempted_sync_at, last_error, client_id)
-       VALUES ('default', NULL, NULL, NULL, NULL, ?)`,
+      `INSERT INTO sync_meta (key, last_sync_revision, last_successful_sync_at, last_attempted_sync_at, last_error, client_id)
+       VALUES ('default', 0, NULL, NULL, NULL, ?)`,
       [generateId()]
     );
   } else {
@@ -166,14 +205,14 @@ async function backfillSyncMetadata(database: SQLite.SQLiteDatabase): Promise<vo
   }
 
   await database.runAsync(
-    `INSERT OR REPLACE INTO sync_meta (key, last_sync_token, last_successful_sync_at, last_attempted_sync_at, last_error, client_id)
+    `INSERT OR REPLACE INTO sync_meta (key, last_sync_revision, last_successful_sync_at, last_attempted_sync_at, last_error, client_id)
      SELECT 'schema_version', ?, NULL, NULL, NULL, NULL
      WHERE NOT EXISTS (SELECT 1 FROM sync_meta WHERE key = 'schema_version')`,
-    [String(SCHEMA_VERSION)]
+    [SCHEMA_VERSION]
   );
   await database.runAsync(
-    `UPDATE sync_meta SET last_sync_token = ? WHERE key = 'schema_version'`,
-    [String(SCHEMA_VERSION)]
+    `UPDATE sync_meta SET last_sync_revision = ? WHERE key = 'schema_version'`,
+    [SCHEMA_VERSION]
   );
 }
 
@@ -192,6 +231,8 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
     }
   }
   await db.execAsync(CREATE_SYNC_META_TABLE);
+  await migrateLegacyTimestampColumn(db);
+  await migrateLegacySyncMeta(db);
   await ensureColumns(db);
   await backfillSyncMetadata(db);
   isInitialized = true;

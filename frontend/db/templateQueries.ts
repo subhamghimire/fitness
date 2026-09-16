@@ -18,7 +18,7 @@ export async function insertTemplate(t: TemplateLocal): Promise<void> {
   await getDatabase().runAsync(
     `INSERT INTO templates_local (
       id, name, created_at,
-      user_id, updated_at, local_updated_at, server_updated_at, deleted_at,
+      user_id, updated_at, client_updated_at, server_updated_at, deleted_at,
       sync_status, revision, last_synced_revision
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -27,7 +27,7 @@ export async function insertTemplate(t: TemplateLocal): Promise<void> {
       t.created_at,
       t.user_id ?? sync.user_id,
       t.updated_at ?? sync.updated_at,
-      t.local_updated_at ?? sync.local_updated_at,
+      t.client_updated_at ?? sync.client_updated_at,
       t.server_updated_at ?? sync.server_updated_at,
       t.deleted_at ?? sync.deleted_at,
       t.sync_status ?? sync.sync_status,
@@ -42,7 +42,7 @@ export async function insertTemplateExercise(e: TemplateExerciseLocal): Promise<
   await getDatabase().runAsync(
     `INSERT INTO template_exercises_local (
       id, template_id, name, order_index,
-      user_id, created_at, updated_at, local_updated_at, server_updated_at, deleted_at,
+      user_id, created_at, updated_at, client_updated_at, server_updated_at, deleted_at,
       sync_status, revision, last_synced_revision
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -53,7 +53,7 @@ export async function insertTemplateExercise(e: TemplateExerciseLocal): Promise<
       e.user_id ?? sync.user_id,
       e.created_at ?? sync.created_at,
       e.updated_at ?? sync.updated_at,
-      e.local_updated_at ?? sync.local_updated_at,
+      e.client_updated_at ?? sync.client_updated_at,
       e.server_updated_at ?? sync.server_updated_at,
       e.deleted_at ?? sync.deleted_at,
       e.sync_status ?? sync.sync_status,
@@ -68,7 +68,7 @@ export async function insertTemplateSet(s: TemplateSetLocal): Promise<void> {
   await getDatabase().runAsync(
     `INSERT INTO template_sets_local (
       id, template_exercise_id, order_index, weight, reps, is_warmup, is_dropset, is_failure,
-      user_id, created_at, updated_at, local_updated_at, server_updated_at, deleted_at,
+      user_id, created_at, updated_at, client_updated_at, server_updated_at, deleted_at,
       sync_status, revision, last_synced_revision
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -83,7 +83,7 @@ export async function insertTemplateSet(s: TemplateSetLocal): Promise<void> {
       s.user_id ?? sync.user_id,
       s.created_at ?? sync.created_at,
       s.updated_at ?? sync.updated_at,
-      s.local_updated_at ?? sync.local_updated_at,
+      s.client_updated_at ?? sync.client_updated_at,
       s.server_updated_at ?? sync.server_updated_at,
       s.deleted_at ?? sync.deleted_at,
       s.sync_status ?? sync.sync_status,
@@ -148,8 +148,8 @@ export async function deleteTemplate(id: string): Promise<void> {
   if (!current) return;
   const touch = touchPending(current.revision);
   await db.runAsync(
-    `UPDATE templates_local SET deleted_at = ?, updated_at = ?, local_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
-    [now, touch.updated_at, touch.local_updated_at, touch.sync_status, touch.revision, id]
+    `UPDATE templates_local SET deleted_at = ?, updated_at = ?, client_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
+    [now, touch.updated_at, touch.client_updated_at, touch.sync_status, touch.revision, id]
   );
 
   const exs = await db.getAllAsync<{ id: string; revision: number }>(
@@ -159,8 +159,8 @@ export async function deleteTemplate(id: string): Promise<void> {
   for (const ex of exs) {
     const et = touchPending(ex.revision);
     await db.runAsync(
-      `UPDATE template_exercises_local SET deleted_at = ?, updated_at = ?, local_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
-      [now, et.updated_at, et.local_updated_at, et.sync_status, et.revision, ex.id]
+      `UPDATE template_exercises_local SET deleted_at = ?, updated_at = ?, client_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
+      [now, et.updated_at, et.client_updated_at, et.sync_status, et.revision, ex.id]
     );
     const sets = await db.getAllAsync<{ id: string; revision: number }>(
       'SELECT id, revision FROM template_sets_local WHERE template_exercise_id = ? AND deleted_at IS NULL',
@@ -169,8 +169,8 @@ export async function deleteTemplate(id: string): Promise<void> {
     for (const s of sets) {
       const st = touchPending(s.revision);
       await db.runAsync(
-        `UPDATE template_sets_local SET deleted_at = ?, updated_at = ?, local_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
-        [now, st.updated_at, st.local_updated_at, st.sync_status, st.revision, s.id]
+        `UPDATE template_sets_local SET deleted_at = ?, updated_at = ?, client_updated_at = ?, sync_status = ?, revision = ? WHERE id = ?`,
+        [now, st.updated_at, st.client_updated_at, st.sync_status, st.revision, s.id]
       );
     }
   }

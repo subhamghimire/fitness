@@ -10,22 +10,11 @@ import { UserTemplate } from "../workouts/entities/user-template.entity";
 import { UserTemplateExercise } from "../workouts/entities/user-template-exercise.entity";
 import { UserTemplateSet } from "../workouts/entities/user-template-set.entity";
 import { UserSyncState } from "./entities/user-sync-state.entity";
+import { SyncChange } from "./entities/sync-change.entity";
 import { AuthModule } from "../auth/auth.module";
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([
-      Workout,
-      WorkoutExercise,
-      Set,
-      Exercise,
-      UserTemplate,
-      UserTemplateExercise,
-      UserTemplateSet,
-      UserSyncState
-    ]),
-    AuthModule
-  ],
+  imports: [TypeOrmModule.forFeature([Workout, WorkoutExercise, Set, Exercise, UserTemplate, UserTemplateExercise, UserTemplateSet, UserSyncState, SyncChange]), AuthModule],
   controllers: [SyncController],
   providers: [SyncService],
   exports: [SyncService]

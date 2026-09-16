@@ -7,7 +7,7 @@ const BATCH_LIMIT = 200;
 type DirtyRow = {
   id: string;
   revision: number;
-  local_updated_at: string;
+  client_updated_at: string;
   deleted_at: string | null;
   sync_status: string;
   last_synced_revision: number | null;
@@ -20,7 +20,7 @@ function toChange(row: DirtyRow, payload: Record<string, unknown> | null): SyncC
     op,
     id: row.id,
     revision: row.revision,
-    localUpdatedAt: row.local_updated_at,
+    clientUpdatedAt: row.client_updated_at,
     payload: op === 'delete' ? null : payload,
   };
 }
@@ -41,7 +41,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
     `SELECT * FROM workouts_local
      WHERE status = 'completed'
        AND (sync_status IN ('pending','conflict') OR last_synced_revision IS NULL OR revision > COALESCE(last_synced_revision, 0))
-     ORDER BY local_updated_at ASC
+     ORDER BY client_updated_at ASC
      LIMIT ?`,
     [remaining]
   );
@@ -56,7 +56,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
         endedAt: row.ended_at ?? null,
         status: row.status,
         revision: row.revision,
-        localUpdatedAt: row.local_updated_at,
+        clientUpdatedAt: row.client_updated_at,
         deletedAt: row.deleted_at,
       })
     );
@@ -69,7 +69,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
      JOIN workouts_local w ON w.id = e.workout_id
      WHERE w.status = 'completed'
        AND (e.sync_status IN ('pending','conflict') OR e.last_synced_revision IS NULL OR e.revision > COALESCE(e.last_synced_revision, 0))
-     ORDER BY e.local_updated_at ASC
+     ORDER BY e.client_updated_at ASC
      LIMIT ?`,
     [remaining]
   );
@@ -83,7 +83,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
         notes: row.notes ?? null,
         restSeconds: row.rest_seconds ?? null,
         revision: row.revision,
-        localUpdatedAt: row.local_updated_at,
+        clientUpdatedAt: row.client_updated_at,
         deletedAt: row.deleted_at,
       })
     );
@@ -97,7 +97,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
      JOIN workouts_local w ON w.id = e.workout_id
      WHERE w.status = 'completed'
        AND (s.sync_status IN ('pending','conflict') OR s.last_synced_revision IS NULL OR s.revision > COALESCE(s.last_synced_revision, 0))
-     ORDER BY s.local_updated_at ASC
+     ORDER BY s.client_updated_at ASC
      LIMIT ?`,
     [remaining]
   );
@@ -113,7 +113,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
         isDropset: row.is_dropset === 1,
         isFailure: row.is_failure === 1,
         revision: row.revision,
-        localUpdatedAt: row.local_updated_at,
+        clientUpdatedAt: row.client_updated_at,
         deletedAt: row.deleted_at,
       })
     );
@@ -124,7 +124,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
   const templateRows = await db.getAllAsync<DirtyRow>(
     `SELECT * FROM templates_local
      WHERE sync_status IN ('pending','conflict') OR last_synced_revision IS NULL OR revision > COALESCE(last_synced_revision, 0)
-     ORDER BY local_updated_at ASC
+     ORDER BY client_updated_at ASC
      LIMIT ?`,
     [remaining]
   );
@@ -135,7 +135,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
         name: row.name,
         createdAt: row.created_at,
         revision: row.revision,
-        localUpdatedAt: row.local_updated_at,
+        clientUpdatedAt: row.client_updated_at,
         deletedAt: row.deleted_at,
       })
     );
@@ -146,7 +146,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
   const teRows = await db.getAllAsync<DirtyRow>(
     `SELECT * FROM template_exercises_local
      WHERE sync_status IN ('pending','conflict') OR last_synced_revision IS NULL OR revision > COALESCE(last_synced_revision, 0)
-     ORDER BY local_updated_at ASC
+     ORDER BY client_updated_at ASC
      LIMIT ?`,
     [remaining]
   );
@@ -158,7 +158,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
         name: row.name,
         orderIndex: row.order_index,
         revision: row.revision,
-        localUpdatedAt: row.local_updated_at,
+        clientUpdatedAt: row.client_updated_at,
         deletedAt: row.deleted_at,
       })
     );
@@ -169,7 +169,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
   const tsRows = await db.getAllAsync<DirtyRow>(
     `SELECT * FROM template_sets_local
      WHERE sync_status IN ('pending','conflict') OR last_synced_revision IS NULL OR revision > COALESCE(last_synced_revision, 0)
-     ORDER BY local_updated_at ASC
+     ORDER BY client_updated_at ASC
      LIMIT ?`,
     [remaining]
   );
@@ -185,7 +185,7 @@ export async function collectDirtyChanges(limit = BATCH_LIMIT): Promise<SyncBatc
         isDropset: row.is_dropset === 1,
         isFailure: row.is_failure === 1,
         revision: row.revision,
-        localUpdatedAt: row.local_updated_at,
+        clientUpdatedAt: row.client_updated_at,
         deletedAt: row.deleted_at,
       })
     );

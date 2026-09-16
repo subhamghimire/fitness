@@ -1,5 +1,5 @@
-import { IsString, IsUUID, IsOptional, ValidateIf, IsNumber, IsBoolean, IsArray, ValidateNested, IsDateString } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsUUID, IsOptional, ValidateIf, IsNumber, IsBoolean, IsArray, ValidateNested, IsDateString } from "class-validator";
+import { Type } from "class-transformer";
 
 export class SyncSetDto {
   @IsUUID()
@@ -42,11 +42,15 @@ export class SyncSetDto {
   distance?: number | null;
 }
 
+function hasExerciseId(o: Pick<SyncExerciseDto, "exerciseId">): boolean {
+  return o.exerciseId !== undefined && o.exerciseId !== null && o.exerciseId !== "";
+}
+
 export class SyncExerciseDto {
   @IsUUID()
   id: string;
 
-  @ValidateIf((o) => o.exerciseId !== undefined && o.exerciseId !== null && o.exerciseId !== '')
+  @ValidateIf(hasExerciseId)
   @IsUUID()
   exerciseId?: string;
 

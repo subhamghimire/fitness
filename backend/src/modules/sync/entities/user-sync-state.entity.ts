@@ -14,6 +14,10 @@ export class UserSyncState extends AbstractEntity {
   @Column({ name: "client_id", type: "varchar", length: 100, nullable: true })
   clientId: string | null;
 
+  /** Monotonic sync cursor: the last sync_changes.id seen by this device. */
+  @Column({ name: "sync_revision", type: "int", default: 0 })
+  syncRevision: number;
+
   @ManyToOne(() => User, { onDelete: "CASCADE" })
   @JoinColumn({ name: "user_id" })
   user: User;

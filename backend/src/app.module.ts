@@ -16,7 +16,6 @@ import { FilesModule } from "./modules/files/files.module";
 import { UserModule } from "./modules/users/user.module";
 import { HealthController } from "./common/health.controller";
 
-
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ".env", validate: validateEnv }),

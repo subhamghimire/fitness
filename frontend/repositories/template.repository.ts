@@ -17,7 +17,7 @@ export const TemplateRepository = {
       created_at: partial.created_at,
       user_id: sync.user_id,
       updated_at: sync.updated_at,
-      local_updated_at: sync.local_updated_at,
+      client_updated_at: sync.client_updated_at,
       server_updated_at: sync.server_updated_at,
       deleted_at: sync.deleted_at,
       sync_status: sync.sync_status,

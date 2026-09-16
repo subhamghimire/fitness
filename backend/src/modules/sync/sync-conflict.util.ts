@@ -1,26 +1,34 @@
 /**
  * Shared server-side LWW helpers (mirrors mobile sync/conflict.ts).
+ *
+ * Conflict resolution uses the CLIENT mutation timestamp for both sides,
+ * never the server receive time.
+ *
+ *   incomingClientUpdatedAt  – from the push request (what the client last touched)
+ *   existingClientUpdatedAt  – stored on the entity from the last accepted push;
+ *                               falls back to updatedAt for pre-migration rows
+ *
+ * Pre-migration rows have no clientUpdatedAt yet; the caller passes
+ * `entity.clientUpdatedAt ?? entity.updatedAt` so the comparison degrades
+ * gracefully to the old behaviour for legacy data.
  */
 export function resolveWinner(
-  clientLocalUpdatedAt: string,
-  serverUpdatedAt: Date | null | undefined,
+  incomingClientUpdatedAt: string | Date | null | undefined,
+  existingClientUpdatedAt: Date | null | undefined,
   clientRevision: number,
   serverRevision: number,
   opts?: { clientDeleted?: boolean; serverDeleted?: boolean }
 ): "client" | "server" {
+  const clientMs = toMs(incomingClientUpdatedAt);
+  const serverMs = toMs(existingClientUpdatedAt);
+
   if (opts?.clientDeleted && !opts?.serverDeleted) {
-    const clientMs = Date.parse(clientLocalUpdatedAt);
-    const serverMs = serverUpdatedAt ? serverUpdatedAt.getTime() : 0;
     return clientMs >= serverMs ? "client" : "server";
   }
   if (opts?.serverDeleted && !opts?.clientDeleted) {
-    const clientMs = Date.parse(clientLocalUpdatedAt);
-    const serverMs = serverUpdatedAt ? serverUpdatedAt.getTime() : 0;
     return serverMs >= clientMs ? "server" : "client";
   }
 
-  const clientMs = Date.parse(clientLocalUpdatedAt);
-  const serverMs = serverUpdatedAt ? serverUpdatedAt.getTime() : 0;
   if (clientMs > serverMs) return "client";
   if (clientMs < serverMs) return "server";
   if (clientRevision > serverRevision) return "client";
@@ -28,9 +36,12 @@ export function resolveWinner(
   return "server";
 }
 
-export function isIdempotentReplay(
-  existingRevision: number | null | undefined,
-  incomingRevision: number
-): boolean {
+export function isIdempotentReplay(existingRevision: number | null | undefined, incomingRevision: number): boolean {
   return existingRevision != null && existingRevision === incomingRevision;
+}
+
+function toMs(v: string | Date | null | undefined): number {
+  if (v == null) return 0;
+  if (typeof v === "string") return Date.parse(v) || 0;
+  return v.getTime() || 0;
 }

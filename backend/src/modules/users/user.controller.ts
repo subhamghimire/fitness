@@ -1,25 +1,7 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Patch,
-  Body,
-  Query,
-  ParseUUIDPipe,
-  Put,
-  UseGuards,
-  ForbiddenException
-} from "@nestjs/common";
+import { Controller, Get, Param, Patch, Body, Query, ParseUUIDPipe, Put, UseGuards, ForbiddenException } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiBearerAuth } from "@nestjs/swagger";
 import { UserService } from "./user.service";
-import {
-  UserResponseDto,
-  UserQueryDto,
-  UpdateUserDto,
-  UpdateMeDto,
-  ChangePasswordDto,
-  PaginatedUserResponseDto
-} from "./dto";
+import { UserResponseDto, UserQueryDto, UpdateUserDto, UpdateMeDto, ChangePasswordDto, PaginatedUserResponseDto } from "./dto";
 import { PaginatedResponseDto } from "src/common/dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
@@ -75,11 +57,7 @@ export class UserController {
   @ApiParam({ name: "id", description: "User ID", type: "string" })
   @ApiBody({ type: UpdateUserDto })
   @ApiResponse({ status: 200, type: UserResponseDto })
-  async updateUser(
-    @CurrentUser() actor: User,
-    @Param("id", ParseUUIDPipe) id: string,
-    @Body() dto: UpdateUserDto
-  ): Promise<UserResponseDto> {
+  async updateUser(@CurrentUser() actor: User, @Param("id", ParseUUIDPipe) id: string, @Body() dto: UpdateUserDto): Promise<UserResponseDto> {
     if (actor.id !== id) throw new ForbiddenException("You can only update your own profile");
     return this.userService.updateUser(id, dto);
   }

@@ -2,16 +2,16 @@
  * Conflict resolution helpers for offline-first sync.
  *
  * Strategies (per plan):
- * - Workout / exercise / set / template rows: last-write-wins by localUpdatedAt
+ * - Workout / exercise / set / template rows: last-write-wins by clientUpdatedAt
  * - Tie-break: higher revision, then prefer server
- * - Soft delete vs update: delete wins if delete.localUpdatedAt >= update.localUpdatedAt
+ * - Soft delete vs update: delete wins if delete.clientUpdatedAt >= update.clientUpdatedAt
  */
 
 export type ResolveWinner = 'client' | 'server';
 
 export interface ConflictTimestamps {
-  clientLocalUpdatedAt: string;
-  serverUpdatedAt: string;
+  localClientUpdatedAt: string;
+  serverClientUpdatedAt: string;
   clientRevision: number;
   serverRevision: number;
   clientDeleted?: boolean;
@@ -29,13 +29,13 @@ export function compareIso(a: string, b: string): number {
 
 export function resolveLww(input: ConflictTimestamps): ResolveWinner {
   if (input.clientDeleted && !input.serverDeleted) {
-    return compareIso(input.clientLocalUpdatedAt, input.serverUpdatedAt) >= 0 ? 'client' : 'server';
+    return compareIso(input.localClientUpdatedAt, input.serverClientUpdatedAt) >= 0 ? 'client' : 'server';
   }
   if (input.serverDeleted && !input.clientDeleted) {
-    return compareIso(input.serverUpdatedAt, input.clientLocalUpdatedAt) >= 0 ? 'server' : 'client';
+    return compareIso(input.serverClientUpdatedAt, input.localClientUpdatedAt) >= 0 ? 'server' : 'client';
   }
 
-  const byTime = compareIso(input.clientLocalUpdatedAt, input.serverUpdatedAt);
+  const byTime = compareIso(input.localClientUpdatedAt, input.serverClientUpdatedAt);
   if (byTime > 0) return 'client';
   if (byTime < 0) return 'server';
   if (input.clientRevision > input.serverRevision) return 'client';
@@ -46,15 +46,15 @@ export function resolveLww(input: ConflictTimestamps): ResolveWinner {
 export function shouldApplyServerChange(params: {
   localRevision: number;
   localSyncedRevision: number | null;
-  localUpdatedAt: string;
+  localClientUpdatedAt: string;
   serverRevision: number;
-  serverUpdatedAt: string;
+  serverClientUpdatedAt: string;
   localPending: boolean;
 }): boolean {
   if (!params.localPending) return true;
   const winner = resolveLww({
-    clientLocalUpdatedAt: params.localUpdatedAt,
-    serverUpdatedAt: params.serverUpdatedAt,
+    localClientUpdatedAt: params.localClientUpdatedAt,
+    serverClientUpdatedAt: params.serverClientUpdatedAt,
     clientRevision: params.localRevision,
     serverRevision: params.serverRevision,
   });
