@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, BadRequestException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource, EntityManager, In, MoreThan } from "typeorm";
 import { Workout } from "../workouts/entities/workout.entity";
@@ -14,6 +14,9 @@ import { User } from "../users/entities/user.entity";
 import { SyncWorkoutDto } from "./dto/sync-workout.dto";
 import { SyncBatchRequestDto, SyncChangeItemDto } from "./dto/sync-batch.dto";
 import { resolveWinner, isIdempotentReplay } from "./sync-conflict.util";
+
+/** Maximum number of individual change items allowed per sync batch. */
+export const MAX_BATCH_ITEMS = 500;
 
 type Accepted = { entityType: string; id: string; revision: number };
 type Rejected = { entityType: string; id: string; reason: string; serverRevision?: number };
@@ -136,6 +139,18 @@ export class SyncService {
   // ─── Primary sync entry point ────────────────────────────────────────────
 
   async syncBatch(dto: SyncBatchRequestDto, user: User) {
+    const changes = dto.changes || {};
+    const totalItems =
+      (changes.workouts?.length ?? 0) +
+      (changes.workoutExercises?.length ?? 0) +
+      (changes.sets?.length ?? 0) +
+      (changes.templates?.length ?? 0) +
+      (changes.templateExercises?.length ?? 0) +
+      (changes.templateSets?.length ?? 0);
+    if (totalItems > MAX_BATCH_ITEMS) {
+      throw new BadRequestException(`Sync batch exceeds maximum of ${MAX_BATCH_ITEMS} items (received ${totalItems})`);
+    }
+
     const accepted: Accepted[] = [];
     const rejected: Rejected[] = [];
     const conflicts: Conflict[] = [];
@@ -146,7 +161,6 @@ export class SyncService {
 
     try {
       const manager = qr.manager;
-      const changes = dto.changes || {};
 
       for (const item of changes.workouts || []) {
         await this.applyWorkoutChange(manager, user, item, accepted, rejected, conflicts);
@@ -170,18 +184,18 @@ export class SyncService {
       const lastSyncRevision = dto.lastSyncRevision ?? 0;
       const { serverChanges, nextRevision } = await this.collectServerChanges(manager, user.id, lastSyncRevision);
 
-      let syncState = await manager.findOne(UserSyncState, { where: { userId: user.id } });
-      if (!syncState) {
-        syncState = manager.create(UserSyncState, {
+      // Upsert sync state atomically (INSERT ... ON CONFLICT DO UPDATE) so two
+      // concurrent first-time syncs from different devices cannot race on the
+      // unique user_id index and crash one transaction with a duplicate key error.
+      await manager.upsert(
+        UserSyncState,
+        {
           userId: user.id,
           syncRevision: nextRevision,
           clientId: dto.clientId
-        });
-      } else {
-        syncState.syncRevision = nextRevision;
-        syncState.clientId = dto.clientId;
-      }
-      await manager.save(UserSyncState, syncState);
+        },
+        ["userId"]
+      );
 
       await qr.commitTransaction();
 
@@ -224,7 +238,7 @@ export class SyncService {
         serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
       });
       if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision)) {
+        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
           conflicts.push({
             entityType: "workout",
             id: item.id,
@@ -256,7 +270,7 @@ export class SyncService {
         serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
       });
       if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision)) {
+        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
           conflicts.push({
             entityType: "workout",
             id: item.id,
@@ -318,7 +332,7 @@ export class SyncService {
         serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
       });
       if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision)) {
+        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
           conflicts.push({
             entityType: "workoutExercise",
             id: item.id,
@@ -375,7 +389,7 @@ export class SyncService {
         serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
       });
       if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision)) {
+        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
           conflicts.push({
             entityType: "workoutExercise",
             id: item.id,
@@ -443,7 +457,7 @@ export class SyncService {
         serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
       });
       if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision)) {
+        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
           conflicts.push({
             entityType: "set",
             id: item.id,
@@ -490,7 +504,7 @@ export class SyncService {
         serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
       });
       if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision)) {
+        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
           conflicts.push({
             entityType: "set",
             id: item.id,
@@ -563,7 +577,7 @@ export class SyncService {
         serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
       });
       if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision)) {
+        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
           conflicts.push({
             entityType: "template",
             id: item.id,
@@ -594,7 +608,7 @@ export class SyncService {
         serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
       });
       if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision)) {
+        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
           conflicts.push({
             entityType: "template",
             id: item.id,
@@ -648,7 +662,7 @@ export class SyncService {
         serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
       });
       if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision)) {
+        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
           conflicts.push({
             entityType: "templateExercise",
             id: item.id,
@@ -696,7 +710,7 @@ export class SyncService {
         serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
       });
       if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision)) {
+        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
           conflicts.push({
             entityType: "templateExercise",
             id: item.id,
@@ -759,7 +773,7 @@ export class SyncService {
         serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
       });
       if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision)) {
+        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
           conflicts.push({
             entityType: "templateSet",
             id: item.id,
@@ -806,7 +820,7 @@ export class SyncService {
         serverDeleted: Boolean(existing.isDeleted || existing.deletedAt)
       });
       if (winner === "server") {
-        if (!isIdempotentReplay(serverRevision, item.revision)) {
+        if (!isIdempotentReplay(serverRevision, item.revision, existing.clientUpdatedAt, item.clientUpdatedAt)) {
           conflicts.push({
             entityType: "templateSet",
             id: item.id,

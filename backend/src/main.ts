@@ -1,6 +1,7 @@
-import { Logger, ValidationPipe } from "@nestjs/common";
+import { ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
+import * as express from "express";
 import * as morgan from "morgan";
 import * as useragent from "express-useragent";
 import { AppModule } from "./app.module";
@@ -11,7 +12,12 @@ import { AppExceptionFilter } from "./shared/filters/app-exception.filter";
 import { join } from "path";
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: false });
+  // bodyParser is disabled and re-registered below with an explicit limit so
+  // large sync batches are accepted (default express.json limit is 100kb which
+  // is too small for a 500-item offline batch).
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: false, bodyParser: false });
+  app.use(express.json({ limit: "5mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
   app.enableCors({ origin: true, credentials: true });
   app.use(morgan("dev"));
@@ -44,17 +50,17 @@ async function bootstrap() {
 
   // Start Server
   await app.listen(PORT, () => {
-    console.log(`Server is starting on ${APP_URL} at ${new Date()} with process id:`, process.pid);
+    console.log(`Server is starting on ${APP_URL} at ${new Date().toISOString()} with process id:`, process.pid);
     if (NODE_ENV != "production") console.log(`Swagger document ${process.env.APP_URL}/api-docs`);
   });
 
   // Graceful Shutdown
   const shutdown = (signal: string): void => {
     console.log(`[${signal}]: Server is shutting down at`, new Date());
-    app.close().finally(() => process.exit(0));
+    void app.close().finally(() => process.exit(0));
   };
 
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 }
-bootstrap();
+void bootstrap();

@@ -253,6 +253,7 @@ interface MockManager {
   findOne(EC: unknown, opts?: { where?: Row }): Promise<AnyEntity | null>;
   find(EC: unknown, opts?: { where?: Row; order?: Record<string, string> }): Promise<AnyEntity[]>;
   insert(EC: unknown, data: Row): Promise<void>;
+  upsert(EC: unknown, data: Row | Row[], conflictPaths: string[]): Promise<void>;
   save(EC: unknown, entity: AnyEntity): Promise<AnyEntity>;
   create(EC: unknown, data: Row): AnyEntity;
   createQueryBuilder(EC: unknown, alias: string): MockQueryBuilder;
@@ -311,6 +312,21 @@ function makeManager(db: MemoryDb): MockManager {
         id: data.id
       };
       store.set(String(row.id), row as unknown as AnyEntity);
+      return Promise.resolve();
+    },
+
+    upsert(EC: unknown, data: Row | Row[], conflictPaths: string[]): Promise<void> {
+      const store = tableStore(db.tables, tableFor(EC));
+      const rows = Array.isArray(data) ? data : [data];
+      const insertViaFactory = (entityClass: unknown, row: Row): Promise<void> => makeManager(db).insert(entityClass, row);
+      for (const row of rows) {
+        const existing = [...store.values()].find((r) => conflictPaths.every((p) => asRow(r)[p] === row[p]));
+        if (existing) {
+          Object.assign(existing, row);
+        } else {
+          void insertViaFactory(EC, row);
+        }
+      }
       return Promise.resolve();
     },
 
