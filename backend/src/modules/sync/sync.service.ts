@@ -14,6 +14,7 @@ import { SyncWorkoutDto } from "./dto/sync-workout.dto";
 import { SyncBatchRequestDto, SyncChangeItemDto } from "./dto/sync-batch.dto";
 import { WorkoutService } from "../workout/workout.service";
 import { WorkoutTemplateService } from "../workout/workout-template.service";
+import { ProgressQueueService } from "../progress/progress-queue.service";
 
 export const MAX_BATCH_ITEMS = 500;
 
@@ -55,7 +56,8 @@ export class SyncService {
     @InjectRepository(SyncChange) private syncChangesRepo: Repository<SyncChange>,
     private dataSource: DataSource,
     private workoutService: WorkoutService,
-    private workoutTemplateService: WorkoutTemplateService
+    private workoutTemplateService: WorkoutTemplateService,
+    private progressQueueService: ProgressQueueService
   ) {}
 
   // ─── Legacy endpoint (kept for backward compat) ──────────────────────────
@@ -175,6 +177,17 @@ export class SyncService {
       for (const item of changes.templateSets || []) {
         await this.workoutTemplateService.applyTemplateSetChange(manager, user, item, accepted, rejected, conflicts);
       }
+
+      // Schedule materialized-statistics reprojection for every touched workout
+      // INSIDE the sync transaction: a committed workout mutation always has its
+      // projection work enqueued atomically (no crash window). Retried batches
+      // coalesce on the unique (user_id, workout_id) key and the projection is
+      // an idempotent replace-on-write, so sync retries can never double-count.
+      await this.progressQueueService.enqueueWorkoutsInTransaction(manager, user.id, {
+        workouts: changes.workouts || [],
+        workoutExercises: changes.workoutExercises || [],
+        sets: changes.sets || []
+      });
 
       const lastSyncRevision = dto.lastSyncRevision ?? 0;
       const { serverChanges, nextRevision } = await this.collectServerChanges(manager, user.id, lastSyncRevision);

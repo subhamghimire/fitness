@@ -15,6 +15,7 @@ import { UserSyncState } from "./entities/user-sync-state.entity";
 import { SyncChange } from "./entities/sync-change.entity";
 import { SyncBatchRequestDto, SyncBatchChangesDto, SyncChangeItemDto } from "./dto/sync-batch.dto";
 import { User } from "../users/entities/user.entity";
+import { ProgressQueueService } from "../progress/progress-queue.service";
 
 type TableKey =
   | "workouts"
@@ -374,12 +375,16 @@ function makeService(db: MemoryDb): { service: SyncService; manager: MockManager
     release: jest.fn(() => Promise.resolve())
   };
   const dataSource = { createQueryRunner: () => qr } as unknown as DataSource;
-  const service = new SyncService(noRepo<UserSyncState>(), noRepo<SyncChange>(), dataSource, makeWorkoutService(), makeWorkoutTemplateService());
+  const service = new SyncService(noRepo<UserSyncState>(), noRepo<SyncChange>(), dataSource, makeWorkoutService(), makeWorkoutTemplateService(), noProgressQueue());
   return { service, manager, qr };
 }
 
 function noRepo<T extends ObjectLiteral>(): Repository<T> {
   return {} as unknown as Repository<T>;
+}
+
+function noProgressQueue(): ProgressQueueService {
+  return { enqueueWorkoutsInTransaction: jest.fn().mockResolvedValue(undefined) } as unknown as ProgressQueueService;
 }
 
 function makeWorkoutService(): WorkoutService {
@@ -938,7 +943,7 @@ describe("SyncService sync scenarios", () => {
         return originalFindOne(EC, opts);
       };
       const dataSource = { createQueryRunner: () => qr } as unknown as DataSource;
-      const service = new SyncService(noRepo<UserSyncState>(), noRepo<SyncChange>(), dataSource, makeWorkoutService(), makeWorkoutTemplateService());
+      const service = new SyncService(noRepo<UserSyncState>(), noRepo<SyncChange>(), dataSource, makeWorkoutService(), makeWorkoutTemplateService(), noProgressQueue());
 
       await expect(service.syncBatch(pushRequest([item({ id: "w1", revision: 1, payload: workoutPayload() })]), userA)).rejects.toThrow("boom");
       expect(qr.rollbackTransaction).toHaveBeenCalled();
