@@ -4,6 +4,7 @@ export class InitMigration1770131457415 implements MigrationInterface {
     name = 'InitMigration1770131457415'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
         await queryRunner.query(`CREATE TYPE "public"."coach_documents_status_enum" AS ENUM('pending', 'approved', 'rejected')`);
         await queryRunner.query(`CREATE TABLE "coach_documents" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "isDeleted" boolean NOT NULL DEFAULT false, "deleted_at" TIMESTAMP WITH TIME ZONE, "deleted_by" uuid, "imageUrl" character varying NOT NULL, "title" character varying(150) NOT NULL, "status" "public"."coach_documents_status_enum" NOT NULL DEFAULT 'pending', "badges" text array, "coachId" uuid NOT NULL, CONSTRAINT "PK_6985a3b98626314fcb658c18714" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE INDEX "IDX_9557902de444d6178909a7b5d0" ON "coach_documents" ("coachId") `);
