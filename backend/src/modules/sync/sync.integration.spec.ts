@@ -34,6 +34,7 @@ import { UserSyncState } from "./entities/user-sync-state.entity";
 import { SyncChange } from "./entities/sync-change.entity";
 import { SyncBatchRequestDto, SyncBatchChangesDto, SyncChangeItemDto } from "./dto/sync-batch.dto";
 import { User } from "../users/entities/user.entity";
+import { ProgressQueueService } from "../progress/progress-queue.service";
 
 type TableKey =
   | "workouts"
@@ -397,12 +398,16 @@ function makeDataSource(db: MemoryDb) {
 
 function makeService(db: MemoryDb): { service: SyncService; dataSource: DataSource; accounting: ConnectionAccounting } {
   const { dataSource, accounting } = makeDataSource(db);
-  const service = new SyncService(noRepo<UserSyncState>(), noRepo<SyncChange>(), dataSource, makeWorkoutService(), makeWorkoutTemplateService());
+  const service = new SyncService(noRepo<UserSyncState>(), noRepo<SyncChange>(), dataSource, makeWorkoutService(), makeWorkoutTemplateService(), noProgressQueue());
   return { service, dataSource, accounting };
 }
 
 function noRepo<T extends ObjectLiteral>(): Repository<T> {
   return {} as unknown as Repository<T>;
+}
+
+function noProgressQueue(): ProgressQueueService {
+  return { enqueueWorkoutsInTransaction: jest.fn().mockResolvedValue(undefined) } as unknown as ProgressQueueService;
 }
 
 function makeWorkoutService(): WorkoutService {
@@ -823,7 +828,7 @@ describe("Scenario 5 — partial failure then retry stays idempotent", () => {
       return qr;
     };
 
-    const service = new SyncService(noRepo<UserSyncState>(), noRepo<SyncChange>(), dataSource, makeWorkoutService(), makeWorkoutTemplateService());
+    const service = new SyncService(noRepo<UserSyncState>(), noRepo<SyncChange>(), dataSource, makeWorkoutService(), makeWorkoutTemplateService(), noProgressQueue());
 
     armed = true;
     const dto = pushRequest(

@@ -7,9 +7,10 @@ import { SyncChange } from "./entities/sync-change.entity";
 import { AuthModule } from "../auth/auth.module";
 import { WorkoutModule } from "../workout/workout.module";
 import { ExerciseModule } from "../exercise/exercise.module";
+import { ProgressModule } from "../progress/progress.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UserSyncState, SyncChange]), AuthModule, WorkoutModule, ExerciseModule],
+  imports: [TypeOrmModule.forFeature([UserSyncState, SyncChange]), AuthModule, WorkoutModule, ExerciseModule, ProgressModule],
   controllers: [SyncController],
   providers: [SyncService],
   exports: [SyncService]

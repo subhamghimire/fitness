@@ -13,6 +13,7 @@ import { CoachRatingModule } from "./modules/coach-rating/coach-rating.module";
 import { ExerciseModule } from "./modules/exercise/exercise.module";
 import { FavoriteExerciseModule } from "./modules/favorite-exercise/favorite-exercise.module";
 import { WorkoutModule } from "./modules/workout/workout.module";
+import { ProgressModule } from "./modules/progress/progress.module";
 import { FilesModule } from "./modules/files/files.module";
 import { UserModule } from "./modules/users/user.module";
 import { HealthController } from "./common/health.controller";
@@ -37,6 +38,7 @@ import { HealthController } from "./common/health.controller";
     ExerciseModule,
     FavoriteExerciseModule,
     WorkoutModule,
+    ProgressModule,
     FilesModule,
     UserModule
   ],
