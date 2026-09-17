@@ -23,7 +23,7 @@ import { HealthController } from "./common/health.controller";
     ThrottlerModule.forRoot([
       {
         ttl: 60000, // Time window in MS
-        limit: 10 // Max requests per window
+        limit: 60 // Max requests per window
       }
     ]),
     DbModule,

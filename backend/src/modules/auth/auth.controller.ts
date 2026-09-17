@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus, Ip } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger";
 import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
@@ -14,6 +15,7 @@ import { User } from "../users/entities/user.entity";
 
 @ApiTags("Auth")
 @Controller("auth")
+@SkipThrottle()
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

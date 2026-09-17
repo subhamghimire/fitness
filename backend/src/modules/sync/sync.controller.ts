@@ -1,4 +1,5 @@
 import { Controller, Post, Body, UseGuards, HttpCode, HttpStatus } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import { SyncService } from "./sync.service";
 import { SyncWorkoutDto } from "./dto/sync-workout.dto";
 import { SyncBatchRequestDto } from "./dto/sync-batch.dto";
@@ -8,6 +9,7 @@ import { User } from "../users/entities/user.entity";
 
 @Controller("sync")
 @UseGuards(JwtAuthGuard)
+@SkipThrottle()
 export class SyncController {
   constructor(private readonly syncService: SyncService) {}
 

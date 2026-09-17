@@ -1500,10 +1500,10 @@ describe("Infrastructure inspection", () => {
   });
 
   describe("rate limiting", () => {
-    it("the app enforces a global 10 req / 60s throttle", () => {
+    it("the app applies a global throttle with a generous per-IP budget", () => {
       const file = readFileSync(join(process.cwd(), "src/app.module.ts"), "utf8");
       expect(file).toContain("ttl: 60000");
-      expect(file).toContain("limit: 10");
+      expect(file).toContain("limit: 60");
       expect(file).toContain("ThrottlerGuard");
     });
   });
