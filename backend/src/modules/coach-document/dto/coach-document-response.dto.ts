@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { PaginatedResponseDto, PaginationMeta } from "src/common/dto";
-import { CoachDocumentStatus } from "../enums";
+import { CoachDocumentStatus, CoachDocumentType } from "../enums";
 
 export class CoachDocumentResponseDto {
   @ApiProperty()
@@ -12,8 +12,11 @@ export class CoachDocumentResponseDto {
   @ApiProperty()
   title: string;
 
-  @ApiProperty()
-  imageUrl: string;
+  @ApiProperty({ enum: CoachDocumentType })
+  type: CoachDocumentType;
+
+  @ApiPropertyOptional({ format: "uuid", description: "Reference to a Files module record (binary is never stored in the DB)" })
+  fileId: string | null;
 
   @ApiProperty({ enum: CoachDocumentStatus })
   status: CoachDocumentStatus;

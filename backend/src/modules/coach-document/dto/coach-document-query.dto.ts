@@ -1,10 +1,10 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsUUID, IsEnum } from "class-validator";
+import { IsEnum, IsOptional, IsUUID } from "class-validator";
 import { PaginationQueryDto } from "src/common/dto";
-import { CoachDocumentStatus } from "../enums";
+import { CoachDocumentStatus, CoachDocumentType } from "../enums";
 
 export class CoachDocumentQueryDto extends PaginationQueryDto {
-  @ApiPropertyOptional({ description: "Filter by coach ID" })
+  @ApiPropertyOptional({ description: "Filter by coach ID (admin only; owners are always scoped to themselves)" })
   @IsOptional()
   @IsUUID()
   coachId?: string;
@@ -13,4 +13,9 @@ export class CoachDocumentQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(CoachDocumentStatus)
   status?: CoachDocumentStatus;
+
+  @ApiPropertyOptional({ enum: CoachDocumentType, description: "Filter by type" })
+  @IsOptional()
+  @IsEnum(CoachDocumentType)
+  type?: CoachDocumentType;
 }

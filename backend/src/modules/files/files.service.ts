@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger, BadRequestException } from "@nestjs/common";
+import { Injectable, NotFoundException, Logger, BadRequestException, ForbiddenException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
 import { FileEntity } from "./entities/file.entity";
@@ -7,6 +7,8 @@ import * as path from "path";
 import { v4 as uuidv4 } from "uuid";
 
 import { FileFolder } from "./enums/file-folder.enum";
+import { User } from "../users/entities/user.entity";
+import { UserRole } from "../users/enums";
 
 @Injectable()
 export class FilesService {
@@ -26,7 +28,7 @@ export class FilesService {
     }
   }
 
-  async uploadFile(file: Express.Multer.File, folder: FileFolder = FileFolder.MISC): Promise<FileEntity> {
+  async uploadFile(file: Express.Multer.File, folder: FileFolder = FileFolder.MISC, ownerId?: string | null): Promise<FileEntity> {
     if (!file) {
       throw new BadRequestException("No file provided");
     }
@@ -49,24 +51,62 @@ export class FilesService {
       mimetype: file.mimetype,
       path: filePath.replace(/\\/g, "/"), // Ensure posix paths
       size: file.size,
-      type: folder
+      type: folder,
+      ownerId: ownerId ?? null
     });
 
     return this.fileRepository.save(fileEntity);
   }
 
-  async uploadFiles(files: Express.Multer.File[], folder: FileFolder = FileFolder.MISC): Promise<FileEntity[]> {
+  async uploadFiles(files: Express.Multer.File[], folder: FileFolder = FileFolder.MISC, ownerId?: string | null): Promise<FileEntity[]> {
     const uploadedFiles: FileEntity[] = [];
     for (const file of files) {
-      uploadedFiles.push(await this.uploadFile(file, folder));
+      uploadedFiles.push(await this.uploadFile(file, folder, ownerId));
     }
     return uploadedFiles;
   }
 
-  async deleteFile(id: string): Promise<{ success: boolean; message: string }> {
+  /**
+   * A user may reference an uploaded file only when it exists, lives in the
+   * expected folder and was uploaded by that same user.
+   */
+  async isFileAccessible(fileId: string, user: User, folder?: FileFolder): Promise<boolean> {
+    const file = await this.fileRepository.findOne({ where: { id: fileId } });
+    if (!file) {
+      return false;
+    }
+    if (folder && file.type !== folder) {
+      return false;
+    }
+    return file.ownerId === user.id;
+  }
+
+  /**
+   * Files uploaded by a user are private by default: only the owner (or an
+   * admin) can read them. Files with no owner (catalog/system assets) remain
+   * publicly readable.
+   */
+  async getReadableFile(id: string, actor?: User): Promise<FileEntity> {
+    const file = await this.getFile(id);
+    if (file.ownerId && file.ownerId !== actor?.id && actor?.role !== UserRole.ADMIN) {
+      throw new ForbiddenException("You do not have permission to access this file");
+    }
+    return file;
+  }
+
+  async deleteFile(id: string, actor?: User): Promise<{ success: boolean; message: string }> {
     const file = await this.fileRepository.findOne({ where: { id } });
     if (!file) {
       throw new NotFoundException(`File with ID "${id}" not found`);
+    }
+
+    const isAdmin = actor?.role === UserRole.ADMIN;
+    if (file.ownerId) {
+      if (file.ownerId !== actor?.id && !isAdmin) {
+        throw new ForbiddenException("You do not have permission to delete this file");
+      }
+    } else if (!isAdmin) {
+      throw new ForbiddenException("Only administrators can delete system files");
     }
 
     try {
@@ -76,7 +116,7 @@ export class FilesService {
       await this.fileRepository.remove(file);
       return { success: true, message: "File deleted successfully" };
     } catch (error) {
-      this.logger.error(`Failed to delete file ${file.path}: ${error.message}`);
+      this.logger.error(`Failed to delete file ${file.path}: ${(error as Error).message}`);
       throw new BadRequestException("Failed to delete file from storage");
     }
   }
