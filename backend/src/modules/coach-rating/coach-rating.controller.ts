@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, ParseUUIDPipe, HttpCode, HttpStatus, UseGuards, Req } from "@nestjs/common";
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, ParseUUIDPipe, HttpCode, HttpStatus, UseGuards } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from "@nestjs/swagger";
 import { CoachRatingService } from "./coach-rating.service";
 import { CreateCoachRatingDto, UpdateCoachRatingDto, CoachRatingQueryDto, PaginatedCoachRatingResponseDto, CoachRatingResponseDto, CoachRatingStatsDto } from "./dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { CurrentUser } from "../auth/decorators/current-user.decorator";
+import { User } from "../users/entities/user.entity";
 
 @ApiTags("Coach Ratings")
 @Controller("coach-ratings")
@@ -15,8 +17,8 @@ export class CoachRatingController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: "Rate a coach" })
   @ApiResponse({ status: 201, type: CoachRatingResponseDto })
-  create(@Req() req: any, @Body() dto: CreateCoachRatingDto): Promise<CoachRatingResponseDto> {
-    return this.service.create(req.user.id, dto);
+  create(@CurrentUser() user: User, @Body() dto: CreateCoachRatingDto): Promise<CoachRatingResponseDto> {
+    return this.service.create(user.id, dto);
   }
 
   @Get()
@@ -48,8 +50,8 @@ export class CoachRatingController {
   @ApiOperation({ summary: "Update your rating" })
   @ApiParam({ name: "id" })
   @ApiResponse({ status: 200, type: CoachRatingResponseDto })
-  update(@Req() req: any, @Param("id", ParseUUIDPipe) id: string, @Body() dto: UpdateCoachRatingDto): Promise<CoachRatingResponseDto> {
-    return this.service.update(req.user.id, id, dto);
+  update(@CurrentUser() user: User, @Param("id", ParseUUIDPipe) id: string, @Body() dto: UpdateCoachRatingDto): Promise<CoachRatingResponseDto> {
+    return this.service.update(user.id, id, dto);
   }
 
   @Delete(":id")
@@ -58,7 +60,7 @@ export class CoachRatingController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Delete your rating" })
   @ApiParam({ name: "id" })
-  remove(@Req() req: any, @Param("id", ParseUUIDPipe) id: string): Promise<{ success: boolean; message: string }> {
-    return this.service.remove(req.user.id, id);
+  remove(@CurrentUser() user: User, @Param("id", ParseUUIDPipe) id: string): Promise<{ success: boolean; message: string }> {
+    return this.service.remove(user.id, id);
   }
 }

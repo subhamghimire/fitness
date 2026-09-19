@@ -1,22 +1,23 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsString, IsBoolean } from "class-validator";
+import { IsEnum, IsOptional, IsString } from "class-validator";
 import { Transform } from "class-transformer";
 import { PaginationQueryDto } from "src/common/dto";
+import { CoachVerificationStatus } from "../enums";
 
 export class CoachQueryDto extends PaginationQueryDto {
-  @ApiPropertyOptional({ example: "John", description: "Search by name or bio" })
+  @ApiPropertyOptional({ example: "John", description: "Search by name" })
   @IsOptional()
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ example: true, description: "Filter by verified status" })
+  @ApiPropertyOptional({ description: "Filter by verification state (admin only). Public discovery always returns verified coaches." })
   @IsOptional()
-  @Transform(({ value }) => value === "true" || value === true)
-  @IsBoolean()
-  isVerified?: boolean;
+  @Transform(({ value }) => value as CoachVerificationStatus)
+  @IsEnum(CoachVerificationStatus)
+  verificationStatus?: CoachVerificationStatus;
 
-  @ApiPropertyOptional({ enum: ["name", "rank", "createdAt"], default: "rank", description: "Sort field" })
+  @ApiPropertyOptional({ enum: ["name", "rank", "createdAt", "averageRating"], default: "rank", description: "Sort field" })
   @IsOptional()
   @IsString()
-  sortBy?: "name" | "rank" | "createdAt" = "rank";
+  sortBy?: "name" | "rank" | "createdAt" | "averageRating" = "rank";
 }

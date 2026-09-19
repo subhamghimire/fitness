@@ -1,29 +1,25 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsString, IsOptional, IsArray, IsUUID, IsEnum, MaxLength } from "class-validator";
-import { CoachDocumentStatus } from "../enums";
+import { IsArray, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from "class-validator";
+import { CoachDocumentType } from "../enums";
 
 export class CreateCoachDocumentDto {
-  @ApiProperty({ description: "Coach UUID" })
-  @IsUUID()
-  coachId: string;
-
-  @ApiProperty({ example: "Certification", description: "Document title" })
+  @ApiProperty({ example: "CSCS Certification", description: "Document title" })
   @IsString()
   @MaxLength(150)
   title: string;
 
-  @ApiProperty({ example: "/uploads/documents/cert.jpg", description: "Document image URL" })
-  @IsString()
-  imageUrl: string;
+  @ApiProperty({ description: "Id of a file previously uploaded via the Files module", format: "uuid" })
+  @IsUUID()
+  fileId: string;
 
-  @ApiPropertyOptional({ example: ["certified", "verified"], description: "Document badges" })
+  @ApiPropertyOptional({ enum: CoachDocumentType, default: CoachDocumentType.OTHER })
+  @IsOptional()
+  @IsEnum(CoachDocumentType)
+  type?: CoachDocumentType;
+
+  @ApiPropertyOptional({ example: ["certified"], description: "Document badges" })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   badges?: string[];
-
-  @ApiPropertyOptional({ enum: CoachDocumentStatus, default: CoachDocumentStatus.PENDING })
-  @IsOptional()
-  @IsEnum(CoachDocumentStatus)
-  status?: CoachDocumentStatus;
 }

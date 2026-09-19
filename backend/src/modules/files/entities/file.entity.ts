@@ -31,6 +31,10 @@ export class FileEntity extends AbstractEntity {
   @Column({ default: FileFolder.MISC })
   type: FileFolder;
 
+  @ApiProperty({ description: "Uploader user id. Files without an owner are treated as public." })
+  @Column({ name: "owner_id", type: "uuid", nullable: true })
+  ownerId: string | null;
+
   @ManyToOne(() => Exercise, (exercise) => exercise.images, {
     onDelete: "CASCADE"
   })
