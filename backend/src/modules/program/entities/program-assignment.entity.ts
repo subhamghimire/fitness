@@ -32,6 +32,7 @@ export class ProgramAssignment extends AbstractEntity {
   program: Program;
 
   @Index("idx_program_assignments_coach")
+  @Index("idx_program_assignments_coach_status", ["coachId", "status"])
   @Column({ name: "coach_id", type: "uuid" })
   coachId: string;
 

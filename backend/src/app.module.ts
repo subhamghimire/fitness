@@ -15,6 +15,7 @@ import { FavoriteExerciseModule } from "./modules/favorite-exercise/favorite-exe
 import { WorkoutModule } from "./modules/workout/workout.module";
 import { ProgressModule } from "./modules/progress/progress.module";
 import { CoachClientModule } from "./modules/coach-client/coach-client.module";
+import { CoachDashboardModule } from "./modules/coach-dashboard/coach-dashboard.module";
 import { ProgramModule } from "./modules/program/program.module";
 import { FilesModule } from "./modules/files/files.module";
 import { UserModule } from "./modules/users/user.module";
@@ -42,6 +43,7 @@ import { HealthController } from "./common/health.controller";
     WorkoutModule,
     ProgressModule,
     CoachClientModule,
+    CoachDashboardModule,
     ProgramModule,
     FilesModule,
     UserModule
