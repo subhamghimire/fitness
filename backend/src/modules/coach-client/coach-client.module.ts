@@ -6,9 +6,10 @@ import { User } from "../users/entities/user.entity";
 import { CoachClientRelationshipService } from "./coach-client-relationship.service";
 import { CoachClientRelationshipController } from "./coach-client-relationship.controller";
 import { ClientCoachController } from "./client-coach.controller";
+import { ProgressModule } from "../progress/progress.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([CoachClientRelationship, Coach, User])],
+  imports: [TypeOrmModule.forFeature([CoachClientRelationship, Coach, User]), ProgressModule],
   controllers: [CoachClientRelationshipController, ClientCoachController],
   providers: [CoachClientRelationshipService],
   exports: [CoachClientRelationshipService, TypeOrmModule]
