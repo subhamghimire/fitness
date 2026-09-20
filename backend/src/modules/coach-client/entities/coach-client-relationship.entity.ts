@@ -21,6 +21,7 @@ import { RelationshipStatus } from "../enums/coach-client.enum";
 })
 export class CoachClientRelationship extends AbstractEntity {
   @Index("idx_coach_client_relationships_coach")
+  @Index("idx_coach_client_relationships_coach_status", ["coachId", "status"])
   @Column({ name: "coach_id", type: "uuid" })
   coachId: string;
 
