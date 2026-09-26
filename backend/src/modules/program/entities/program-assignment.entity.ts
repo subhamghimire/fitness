@@ -22,6 +22,9 @@ import { ProgramAssignmentStatus } from "../enums/program.enum";
   unique: true,
   where: `"is_active" = true`
 })
+@Index("idx_pa_coach_client_live_window", ["coachId", "clientId", "status", "isActive", "endDate"], {
+  where: `"isDeleted" = false`
+})
 export class ProgramAssignment extends AbstractEntity {
   @Index("idx_program_assignments_program")
   @Column({ name: "program_id", type: "uuid" })

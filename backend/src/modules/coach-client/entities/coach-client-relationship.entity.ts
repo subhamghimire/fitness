@@ -19,6 +19,12 @@ import { RelationshipStatus } from "../enums/coach-client.enum";
   unique: true,
   where: `"status" IN ('pending', 'active', 'paused')`
 })
+@Index("idx_ccr_coach_live_started", ["coachId", "status", "startedAt", "id"], {
+  where: `"isDeleted" = false`
+})
+@Index("idx_ccr_coach_pending_created", ["coachId", "createdAt", "id"], {
+  where: `"isDeleted" = false AND "status" = 'pending'`
+})
 export class CoachClientRelationship extends AbstractEntity {
   @Index("idx_coach_client_relationships_coach")
   @Index("idx_coach_client_relationships_coach_status", ["coachId", "status"])

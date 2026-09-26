@@ -14,6 +14,9 @@ import { AbstractEntity } from "src/entities";
  */
 @Entity("exercise_stats")
 @Index("idx_exercise_stats_user_last_performed", ["userId", "lastPerformedAt"])
+@Index("idx_exercise_stats_user_last_live", ["userId", "lastPerformedAt", "exerciseId"], {
+  where: `"isDeleted" = false AND "deleted_at" IS NULL`
+})
 @Index("uq_exercise_stats_user_exercise", ["userId", "exerciseId"], { unique: true })
 export class ExerciseStat extends AbstractEntity {
   @Column({ name: "user_id", type: "uuid" })

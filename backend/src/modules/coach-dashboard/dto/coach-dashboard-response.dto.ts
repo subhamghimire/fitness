@@ -99,6 +99,15 @@ export class ProgramProgressSummaryDto {
 }
 
 export class MissedWorkoutDto {
+  @ApiProperty({ description: "Assignment the missed slot belongs to" })
+  assignmentId: string;
+
+  @ApiProperty()
+  programId: string;
+
+  @ApiProperty()
+  programName: string;
+
   @ApiProperty({ description: "Program day that was scheduled" })
   dayId: string;
 
@@ -119,6 +128,21 @@ export class MissedWorkoutDto {
 
   @ApiPropertyOptional()
   workoutName: string | null;
+}
+
+/**
+ * A missed program workout slot attributed to a specific client — the unit the
+ * coach-facing "who is falling behind?" queue is built from.
+ */
+export class MissedWorkoutEntryDto extends MissedWorkoutDto {
+  @ApiProperty()
+  clientId: string;
+
+  @ApiProperty()
+  clientName: string;
+
+  @ApiProperty({ description: "Whole days between the scheduled date and today (0 = due today)" })
+  daysOverdue: number;
 }
 
 export class RecentWorkoutDto {
@@ -156,6 +180,12 @@ export class ClientActivityEntryDto extends RecentWorkoutDto {
 }
 
 export class RecentPrDto {
+  @ApiProperty()
+  clientId: string;
+
+  @ApiProperty()
+  clientName: string;
+
   @ApiProperty({ enum: PersonalRecordType })
   prType: PersonalRecordType;
 
@@ -356,4 +386,14 @@ export class PaginatedClientProgressSummaryResponseDto extends PaginatedResponse
 export class PaginatedClientActivityResponseDto extends PaginatedResponseDto<ClientActivityEntryDto> {
   @ApiProperty({ type: [ClientActivityEntryDto] })
   declare data: ClientActivityEntryDto[];
+}
+
+export class PaginatedPendingRequestResponseDto extends PaginatedResponseDto<PendingRequestDto> {
+  @ApiProperty({ type: [PendingRequestDto] })
+  declare data: PendingRequestDto[];
+}
+
+export class PaginatedMissedWorkoutResponseDto extends PaginatedResponseDto<MissedWorkoutEntryDto> {
+  @ApiProperty({ type: [MissedWorkoutEntryDto] })
+  declare data: MissedWorkoutEntryDto[];
 }

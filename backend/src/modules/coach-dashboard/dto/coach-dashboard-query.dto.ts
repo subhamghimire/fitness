@@ -34,6 +34,8 @@ export class CoachClientListQueryDto extends PaginationQueryDto {
   windowDays?: number;
 }
 
+export class CoachPendingRequestQueryDto extends PaginationQueryDto {}
+
 export class CoachClientDetailQueryDto extends CoachDashboardQueryDto {
   @ApiPropertyOptional({ default: 5, description: "Number of recent workouts / PRs / progression sessions to include" })
   @IsOptional()
@@ -51,5 +53,15 @@ export class CoachActivityQueryDto extends PaginationQueryDto {
   @IsInt()
   @Min(1)
   @Max(365)
+  windowDays?: number;
+}
+
+export class CoachMissedWorkoutQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({ default: 28, description: "Trailing window in days to scan for missed program slots (max 90)" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(90)
   windowDays?: number;
 }

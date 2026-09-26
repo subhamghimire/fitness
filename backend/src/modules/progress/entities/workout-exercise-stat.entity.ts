@@ -15,6 +15,9 @@ import { AbstractEntity } from "src/entities";
  */
 @Entity("workout_exercise_stats")
 @Index("idx_wes_user_exercise_started", ["userId", "exerciseId", "startedAt"])
+@Index("idx_wes_user_exercise_started_live", ["userId", "exerciseId", "startedAt", "workoutId"], {
+  where: `"isDeleted" = false AND "deleted_at" IS NULL`
+})
 @Index("uq_wes_workout_exercise", ["workoutId", "exerciseId"], { unique: true })
 @Index("uq_wes_workout_exercise_id", ["workoutExerciseId"], { unique: true })
 export class WorkoutExerciseStat extends AbstractEntity {
