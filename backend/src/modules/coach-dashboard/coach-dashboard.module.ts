@@ -12,6 +12,7 @@ import { WorkoutStat } from "../progress/entities/workout-stat.entity";
 import { PersonalRecord } from "../progress/entities/personal-record.entity";
 import { ExerciseStat } from "../progress/entities/exercise-stat.entity";
 import { WorkoutExerciseStat } from "../progress/entities/workout-exercise-stat.entity";
+import { Workout } from "../workout/entities/workout.entity";
 import { ProgressModule } from "../progress/progress.module";
 import { AuthModule } from "../auth/auth.module";
 
@@ -36,7 +37,8 @@ import { AuthModule } from "../auth/auth.module";
       WorkoutStat,
       PersonalRecord,
       ExerciseStat,
-      WorkoutExerciseStat
+      WorkoutExerciseStat,
+      Workout
     ])
   ],
   controllers: [CoachDashboardController],

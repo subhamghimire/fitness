@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { In, Repository, SelectQueryBuilder } from "typeorm";
+import { In, IsNull, MoreThanOrEqual, Or, Repository, SelectQueryBuilder } from "typeorm";
 import { TtlCache } from "src/common/cache/ttl-cache";
 import { createPaginatedResponse } from "src/common/dto";
 import { CoachClientRelationship } from "src/modules/coach-client/entities/coach-client-relationship.entity";
@@ -11,14 +11,22 @@ import { Program } from "src/modules/program/entities/program.entity";
 import { ProgramAssignment } from "src/modules/program/entities/program-assignment.entity";
 import { ProgramDay } from "src/modules/program/entities/program-day.entity";
 import { ProgramWorkout } from "src/modules/program/entities/program-workout.entity";
-import { ProgramAssignmentStatus } from "src/modules/program/enums/program.enum";
+import { ProgramAssignmentStatus, ACTIVE_ASSIGNMENT_STATUSES } from "src/modules/program/enums/program.enum";
+import { Workout } from "src/modules/workout/entities/workout.entity";
 import { WorkoutStat } from "src/modules/progress/entities/workout-stat.entity";
 import { WorkoutExerciseStat } from "src/modules/progress/entities/workout-exercise-stat.entity";
 import { ExerciseStat } from "src/modules/progress/entities/exercise-stat.entity";
 import { PersonalRecord } from "src/modules/progress/entities/personal-record.entity";
-import { FrequencyGranularity, VolumeGranularity } from "src/modules/progress/enums/progress.enum";
+import { VolumeGranularity } from "src/modules/progress/enums/progress.enum";
 import { ProgressService } from "src/modules/progress/progress.service";
-import { CoachDashboardQueryDto, CoachClientListQueryDto, CoachClientDetailQueryDto, CoachActivityQueryDto } from "./dto/coach-dashboard-query.dto";
+import {
+  CoachActivityQueryDto,
+  CoachClientDetailQueryDto,
+  CoachClientListQueryDto,
+  CoachDashboardQueryDto,
+  CoachMissedWorkoutQueryDto,
+  CoachPendingRequestQueryDto
+} from "./dto/coach-dashboard-query.dto";
 import {
   ClientActivityEntryDto,
   ClientProgressDetailDto,
@@ -27,8 +35,11 @@ import {
   ExerciseProgressionDto,
   ExerciseSessionSnapshotDto,
   MissedWorkoutDto,
+  MissedWorkoutEntryDto,
   PaginatedClientActivityResponseDto,
   PaginatedClientProgressSummaryResponseDto,
+  PaginatedMissedWorkoutResponseDto,
+  PaginatedPendingRequestResponseDto,
   PendingRequestDto,
   ProgramProgressOverviewDto,
   ProgramProgressSummaryDto,
@@ -48,10 +59,10 @@ const ACTIVITY_WINDOW_CAP = 365;
 const OVERVIEW_TTL_MS = 30_000;
 const LIST_TTL_MS = 15_000;
 const OVERVIEW_CLIENT_PREVIEW = 5;
+const PENDING_REQUEST_PREVIEW = 6;
 const FEED_PREVIEW = 6;
 const TREND_CAP_WEEKS = 52;
 const PROGRESSION_TOP_EXERCISES = 5;
-const PROGRESSION_SESSION_CAP = 50;
 
 /** Relationship statuses a coach can see on their dashboard. */
 const LIVE_STATUSES = [RelationshipStatus.ACTIVE, RelationshipStatus.PAUSED];
@@ -86,12 +97,18 @@ interface BundleRelations {
   workouts: ProgramWorkout[];
 }
 
+/** Spendable pool of logged workouts, keyed by calendar day. See `dayCreditBudget`. */
+interface DayCreditBudget {
+  take: (dateKey: string, slots: number) => number;
+}
+
 interface AssignmentMetrics {
   expectedTrainingDays: number;
   completedTrainingDays: number;
   missedWorkouts: number;
   missedDetails: MissedWorkoutDto[];
   primarySummary: ProgramProgressSummaryDto;
+  summaries: ProgramProgressSummaryDto[];
 }
 
 interface ActivityRow {
@@ -105,6 +122,31 @@ interface ActivityRow {
   reps: string | number;
   setCount: string | number;
   exerciseCount: string | number;
+}
+
+interface PendingRequestRow {
+  relationshipId: string;
+  createdAt: Date;
+  clientId: string;
+  clientName: string;
+  clientEmail: string;
+}
+
+interface RecentPrRow {
+  clientId: string;
+  clientName: string;
+  prType: PersonalRecord["prType"];
+  value: string | number;
+  exerciseId: string | null;
+  exerciseName: string | null;
+  workoutId: string;
+  achievedAt: Date;
+}
+
+interface WorkoutDayRow {
+  userId: string;
+  day: string;
+  workoutCount: string | number;
 }
 
 interface StatRow {
@@ -166,8 +208,9 @@ export class CoachDashboardService {
     const coach = await this.requireCoach(user);
     const window = this.resolveWindow(query.windowDays, DEFAULT_WINDOW_CAP, DEFAULT_WINDOW_DAYS);
     const weeks = this.resolveWeeks(query.weeks);
+    const scopeVersion = await this.relationshipScopeVersion(coach.id);
 
-    const cacheKey = `overview:${coach.id}:${window.days}:${weeks}`;
+    const cacheKey = `overview:${coach.id}:${window.days}:${weeks}:${scopeVersion}`;
     const cached = this.overviewCache.get(cacheKey);
     if (cached) return cached;
 
@@ -181,8 +224,9 @@ export class CoachDashboardService {
     const window = this.resolveWindow(query.windowDays, DEFAULT_WINDOW_CAP, DEFAULT_WINDOW_DAYS);
     const page = Number(query.page ?? 1);
     const limit = Number(query.limit ?? 10);
+    const scopeVersion = await this.relationshipScopeVersion(coach.id);
 
-    const cacheKey = `clients:${coach.id}:${page}:${limit}:${window.days}`;
+    const cacheKey = `clients:${coach.id}:${page}:${limit}:${window.days}:${scopeVersion}`;
     const cached = this.listCache.get(cacheKey);
     if (cached) return cached;
 
@@ -208,27 +252,30 @@ export class CoachDashboardService {
     const recentLimit = this.resolveRecentLimit(query.recentLimit);
 
     const clientIdKey = relationship.clientId;
-    const [windowStatsRows, , workoutDayRows, , recentWorkouts, exerciseProgression] = await Promise.all([
-      this.groupedWindowStats([clientIdKey], window.start),
-      this.groupedTotalStats([clientIdKey]),
-      this.workoutDayKeys([clientIdKey], window.start),
-      this.prCountsForClients([clientIdKey], window.start),
-      this.clientRecentWorkouts(clientIdKey, recentLimit),
-      this.exerciseProgression(clientIdKey, recentLimit)
-    ]);
-
-    const windowStats = windowStatsRows.get(clientIdKey);
-
-    const metrics = await this.assignmentMetrics(coach.id, [clientIdKey], window, workoutDayRows, windowStatsRows);
-    const clientMetrics = metrics.get(clientIdKey);
-    const finalAdherence = this.computeAdherence(windowStats?.activeDays ?? 0, clientMetrics, window, relationship.startedAt);
-
-    const [overviewRes, volumeHistory, frequency, recentPrs] = await Promise.all([
+    const windowStatsPromise = this.groupedWindowStats([clientIdKey], window.start);
+    const workoutDaysPromise = this.workoutDayCounts([clientIdKey], window.start);
+    const assignmentPromise = Promise.all([windowStatsPromise, workoutDaysPromise]).then(([windowStatsRows, workoutDayRows]) =>
+      this.assignmentMetrics(coach.id, [clientIdKey], window, workoutDayRows, windowStatsRows, true)
+    );
+    const progressReadsPromise = Promise.all([
       this.progressService.overview(clientIdKey, { weeks }),
-      this.progressService.volumeHistory(clientIdKey, { granularity: VolumeGranularity.WEEK, from: new Date(Date.now() - weeks * WEEK_MS) }),
-      this.progressService.workoutFrequency(clientIdKey, { granularity: FrequencyGranularity.WEEK, periods: weeks }),
+      this.progressService.volumeHistory(clientIdKey, {
+        granularity: VolumeGranularity.WEEK,
+        from: new Date(Date.now() - weeks * WEEK_MS)
+      }),
       this.progressService.listPersonalRecords(clientIdKey, { page: 1, limit: recentLimit })
     ]);
+
+    const [windowStatsRows, recentWorkouts, exerciseProgression, metrics, [overviewRes, volumeHistory, recentPrs]] = await Promise.all([
+      windowStatsPromise,
+      this.clientRecentWorkouts(clientIdKey, recentLimit),
+      this.exerciseProgression(clientIdKey, recentLimit),
+      assignmentPromise,
+      progressReadsPromise
+    ]);
+    const windowStats = windowStatsRows.get(clientIdKey);
+    const clientMetrics = metrics.get(clientIdKey);
+    const finalAdherence = this.computeAdherence(windowStats?.activeDays ?? 0, clientMetrics, window, relationship.startedAt);
 
     const progressTrends: ProgressTrendEntryDto[] = volumeHistory.map((v) => ({
       bucket: v.bucket,
@@ -246,7 +293,7 @@ export class CoachDashboardService {
       recentWorkouts,
       recentPersonalRecords: recentPrs.data,
       progressTrends,
-      weeklyFrequency: frequency,
+      weeklyFrequency: overviewRes.weeklyWorkoutFrequency,
       exerciseProgression,
       missedWorkoutDetails: clientMetrics?.missedDetails ?? []
     };
@@ -271,50 +318,115 @@ export class CoachDashboardService {
     );
   }
 
+  async pendingRequests(user: User, query: CoachPendingRequestQueryDto): Promise<PaginatedPendingRequestResponseDto> {
+    const coach = await this.requireCoach(user);
+    const page = Number(query.page ?? 1);
+    const limit = Number(query.limit ?? 20);
+
+    const qb = this.pendingRequestsQuery(coach.id);
+    const total = await qb.getCount();
+    qb.skip((page - 1) * limit).take(limit);
+    const rows = await qb.getRawMany<PendingRequestRow>();
+
+    return createPaginatedResponse(
+      rows.map((row) => this.toPendingRequest(row)),
+      total,
+      page,
+      limit
+    );
+  }
+
+  /**
+   * Cross-client "who is falling behind?" queue.
+   *
+   * This is the one dashboard metric that cannot be answered from the
+   * materialized projections: a missed workout only exists once the program
+   * schedule is overlaid on what the client actually logged, so it is derived
+   * from the schedule tables rather than counted in SQL.
+   *
+   * Query budget is fixed (5 reads regardless of client count) and the schedule
+   * is bounded by the trailing window, so the result set is materialized once
+   * and then paginated in memory. Entries are ordered oldest-scheduled-first
+   * because the most overdue slot is the most actionable thing on a coach's
+   * screen.
+   */
+  async missedWorkouts(user: User, query: CoachMissedWorkoutQueryDto): Promise<PaginatedMissedWorkoutResponseDto> {
+    const coach = await this.requireCoach(user);
+    const window = this.resolveWindow(query.windowDays, DEFAULT_WINDOW_CAP, DEFAULT_WINDOW_DAYS);
+    const page = Number(query.page ?? 1);
+    const limit = Number(query.limit ?? 20);
+
+    const relationships = await this.liveRelationshipsQuery(coach.id).getRawMany<LiveRelation>();
+    if (relationships.length === 0) return createPaginatedResponse([], 0, page, limit);
+
+    const clientIds = relationships.map((r) => r.clientId);
+    const workoutDays = await this.workoutDayCounts(clientIds, window.start);
+    const metrics = await this.assignmentMetrics(coach.id, clientIds, window, workoutDays, new Map(), true);
+
+    const nameByClient = new Map(relationships.map((r) => [r.clientId, r.clientName]));
+    const entries: MissedWorkoutEntryDto[] = [];
+    for (const [clientId, clientMetrics] of metrics) {
+      const clientName = nameByClient.get(clientId);
+      if (!clientName) continue;
+      for (const missed of clientMetrics.missedDetails) {
+        entries.push({
+          ...missed,
+          clientId,
+          clientName,
+          daysOverdue: this.daysBetween(missed.scheduledDate, window.today)
+        });
+      }
+    }
+
+    entries.sort((a, b) => a.scheduledDate.getTime() - b.scheduledDate.getTime() || a.clientId.localeCompare(b.clientId) || a.workoutId.localeCompare(b.workoutId));
+
+    return createPaginatedResponse(entries.slice((page - 1) * limit, (page - 1) * limit + limit), entries.length, page, limit);
+  }
+
   // ─── Overview assembly ───────────────────────────────────────────────────
 
   private async buildOverview(coachId: string, window: ScoutWindow, weeks: number): Promise<CoachDashboardOverviewResponseDto> {
-    const [statuses, relationships] = await Promise.all([this.statusCounts(coachId), this.liveRelationshipsQuery(coachId).getRawMany<LiveRelation>()]);
-
-    const [windowStats, totals, workoutDays, prCounts] = await Promise.all([
+    const [statuses, relationships, windowStats, totals, workoutDays, prCounts] = await Promise.all([
+      this.statusCounts(coachId),
+      this.liveRelationshipsQuery(coachId).getRawMany<LiveRelation>(),
       this.groupedWindowStatsCte(coachId, window.start),
       this.groupedTotalStatsCte(coachId),
       this.coachWorkoutDays(coachId, window.start),
       this.prCountsCte(coachId, window.start)
     ]);
 
-    const metrics = await this.assignmentMetrics(
-      coachId,
-      relationships.map((r) => r.clientId),
-      window,
-      workoutDays,
-      windowStats
-    );
-
-    const summaries = relationships.map((r) =>
-      this.buildSummary(r, window, windowStats.get(r.clientId), totals.get(r.clientId), metrics.get(r.clientId), prCounts.get(r.clientId) ?? 0)
-    );
-
-    const [pendingRequests, recentClientWorkouts, recentPersonalRecords, trends] = await Promise.all([
-      this.pendingRequests(coachId),
+    const [metrics, pendingRequests, recentClientWorkouts, recentPersonalRecords, trends] = await Promise.all([
+      this.assignmentMetrics(
+        coachId,
+        relationships.map((r) => r.clientId),
+        window,
+        workoutDays,
+        windowStats
+      ),
+      this.pendingRequestsPreview(coachId),
       this.coachRecentWorkouts(coachId, FEED_PREVIEW),
       this.coachRecentPrs(coachId, FEED_PREVIEW),
       this.coachTrends(coachId, weeks)
     ]);
 
-    const activeCount = relationships.filter((r) => r.status === RelationshipStatus.ACTIVE).length;
-    const pausedClientCount = relationships.length - activeCount;
+    const summaries = relationships.map((r) =>
+      this.buildSummary(r, window, windowStats.get(r.clientId), totals.get(r.clientId), metrics.get(r.clientId), prCounts.get(r.clientId) ?? 0)
+    );
+    const activeSummaries = summaries.filter((summary) => summary.relationship.status === RelationshipStatus.ACTIVE);
+    const activeClientIds = new Set(activeSummaries.map((summary) => summary.client.id));
+    const activeMetrics = new Map([...metrics].filter(([clientId]) => activeClientIds.has(clientId)));
+    const pausedClientCount = relationships.filter((r) => r.status === RelationshipStatus.PAUSED).length;
     const pendingRequestCount = statuses.get(RelationshipStatus.PENDING) ?? 0;
 
     return {
-      activeClientCount: activeCount,
+      activeClientCount: activeSummaries.length,
       pausedClientCount,
       pendingRequestCount,
-      activeClients: summaries.slice(0, OVERVIEW_CLIENT_PREVIEW),
+      activeClients: activeSummaries.slice(0, OVERVIEW_CLIENT_PREVIEW),
       pendingRequests,
       recentClientWorkouts,
-      workoutAdherence: this.aggregateAdherence(summaries),
-      programProgress: this.aggregateProgramProgress(metrics),
+      workoutAdherence: this.aggregateAdherence(activeSummaries),
+      programProgress: this.aggregateProgramProgress(activeMetrics),
       recentPersonalRecords,
       progressTrends: trends
     };
@@ -327,7 +439,7 @@ export class CoachDashboardService {
     const [windowStats, totals, workoutDays, prCounts] = await Promise.all([
       this.groupedWindowStats(clientIds, window.start),
       this.groupedTotalStats(clientIds),
-      this.workoutDayKeys(clientIds, window.start),
+      this.workoutDayCounts(clientIds, window.start),
       this.prCountsForClients(clientIds, window.start)
     ]);
 
@@ -358,7 +470,7 @@ export class CoachDashboardService {
   }
 
   private computeAdherence(activeDays: number, metrics: AssignmentMetrics | undefined, window: ScoutWindow, startedAt: Date | null): WorkoutAdherenceDto {
-    const programBasis = metrics !== undefined && metrics.expectedTrainingDays > 0;
+    const programBasis = metrics !== undefined;
     const expected = programBasis ? metrics.expectedTrainingDays : this.windowBasisDays(window, startedAt);
     const completed = programBasis ? metrics.completedTrainingDays : activeDays;
     return {
@@ -393,7 +505,7 @@ export class CoachDashboardService {
   }
 
   private aggregateProgramProgress(metricsByClient: Map<string, AssignmentMetrics>): ProgramProgressOverviewDto {
-    const summaries: ProgramProgressSummaryDto[] = [...metricsByClient.values()].map((m) => m.primarySummary);
+    const summaries = [...metricsByClient.values()].flatMap((metrics) => metrics.summaries);
     const activeAssignments = summaries.length;
     const scheduledWorkouts = summaries.reduce((acc, s) => acc + s.scheduledWorkouts, 0);
     const completedWorkouts = summaries.reduce((acc, s) => acc + s.completedWorkouts, 0);
@@ -416,14 +528,38 @@ export class CoachDashboardService {
       .addSelect("cc.status", "status")
       .addSelect("cc.startedAt", "startedAt")
       .addSelect("cc.clientId", "clientId")
-      .addSelect("u.id", "clientUserId")
       .addSelect("u.name", "clientName")
       .addSelect("u.email", "clientEmail")
       .innerJoin("cc.client", "u")
       .where("cc.coachId = :coachId", { coachId })
       .andWhere("cc.status IN (:...statuses)", { statuses: LIVE_STATUSES })
       .andWhere("cc.isDeleted = :deleted", { deleted: false })
-      .orderBy("cc.startedAt", "DESC");
+      .andWhere("u.isDeleted = :clientDeleted", { clientDeleted: false })
+      .orderBy("cc.startedAt", "DESC")
+      .addOrderBy("cc.id", "DESC");
+  }
+
+  /**
+   * Cache namespace derived from relationship state. Every cache hit still
+   * performs this cheap indexed probe, so ending, blocking, deleting or
+   * replacing a relationship cannot expose stale client PII from a TTL cache.
+   *
+   * The fingerprint is taken over `(relationship id, status, client soft-delete
+   * flag)` for every non-deleted row rather than over a `MAX(updated_at)`: a
+   * plain timestamp maximum is not monotonic across rows, so ending one
+   * relationship while another row keeps a later timestamp would leave the
+   * namespace unchanged and keep serving the ended client's data.
+   */
+  private async relationshipScopeVersion(coachId: string): Promise<string> {
+    const row = await this.relationshipRepo
+      .createQueryBuilder("cc")
+      .select("COUNT(*)", "count")
+      .addSelect("md5(string_agg(cc.id::text || ':' || cc.status::text || ':' || u.isDeleted::text, ',' ORDER BY cc.id))", "fingerprint")
+      .innerJoin("cc.client", "u")
+      .where("cc.coachId = :coachId", { coachId })
+      .andWhere("cc.isDeleted = :deleted", { deleted: false })
+      .getRawOne<{ count: string; fingerprint: string | null }>();
+    return `${row?.count ?? "0"}:${row?.fingerprint ?? "none"}`;
   }
 
   private async statusCounts(coachId: string): Promise<Map<RelationshipStatus, number>> {
@@ -431,40 +567,35 @@ export class CoachDashboardService {
       .createQueryBuilder("cc")
       .select("cc.status", "status")
       .addSelect("COUNT(*)", "count")
+      .innerJoin("cc.client", "u")
       .where("cc.coachId = :coachId", { coachId })
       .andWhere("cc.isDeleted = :deleted", { deleted: false })
+      .andWhere("u.isDeleted = :clientDeleted", { clientDeleted: false })
       .groupBy("cc.status")
       .getRawMany<{ status: RelationshipStatus; count: string }>();
     return new Map(rows.map((r) => [r.status, Number(r.count)]));
   }
 
-  private async pendingRequests(coachId: string): Promise<PendingRequestDto[]> {
-    const rows = await this.relationshipRepo
+  private pendingRequestsQuery(coachId: string) {
+    return this.relationshipRepo
       .createQueryBuilder("cc")
       .select("cc.id", "relationshipId")
       .addSelect("cc.createdAt", "createdAt")
       .addSelect("cc.clientId", "clientId")
-      .addSelect("u.id", "clientUserId")
       .addSelect("u.name", "clientName")
       .addSelect("u.email", "clientEmail")
       .innerJoin("cc.client", "u")
       .where("cc.coachId = :coachId", { coachId })
       .andWhere("cc.status = :status", { status: RelationshipStatus.PENDING })
       .andWhere("cc.isDeleted = :deleted", { deleted: false })
+      .andWhere("u.isDeleted = :clientDeleted", { clientDeleted: false })
       .orderBy("cc.createdAt", "DESC")
-      .getRawMany<{
-        relationshipId: string;
-        createdAt: Date;
-        clientId: string;
-        clientUserId: string;
-        clientName: string;
-        clientEmail: string;
-      }>();
-    return rows.map((r) => ({
-      relationshipId: r.relationshipId,
-      createdAt: r.createdAt,
-      client: { id: r.clientId, name: r.clientName, email: r.clientEmail }
-    }));
+      .addOrderBy("cc.id", "DESC");
+  }
+
+  private async pendingRequestsPreview(coachId: string): Promise<PendingRequestDto[]> {
+    const rows = await this.pendingRequestsQuery(coachId).take(PENDING_REQUEST_PREVIEW).getRawMany<PendingRequestRow>();
+    return rows.map((row) => this.toPendingRequest(row));
   }
 
   /** Privacy gate: only live relationships are visible to the coach. */
@@ -475,7 +606,6 @@ export class CoachDashboardService {
       .addSelect("cc.status", "status")
       .addSelect("cc.startedAt", "startedAt")
       .addSelect("cc.clientId", "clientId")
-      .addSelect("u.id", "clientUserId")
       .addSelect("u.name", "clientName")
       .addSelect("u.email", "clientEmail")
       .innerJoin("cc.client", "u")
@@ -483,6 +613,7 @@ export class CoachDashboardService {
       .andWhere("cc.clientId = :clientId", { clientId })
       .andWhere("cc.status IN (:...statuses)", { statuses: LIVE_STATUSES })
       .andWhere("cc.isDeleted = :deleted", { deleted: false })
+      .andWhere("u.isDeleted = :clientDeleted", { clientDeleted: false })
       .orderBy("cc.startedAt", "DESC")
       .addOrderBy("cc.createdAt", "DESC")
       .getRawOne<LiveRelation>();
@@ -499,12 +630,11 @@ export class CoachDashboardService {
     return this.relationshipRepo
       .createQueryBuilder("cc")
       .select("cc.clientId", "client_id")
-      .addSelect("u.name", "client_name")
-      .distinctOn(["cc.clientId"])
       .innerJoin("cc.client", "u")
       .where("cc.coachId = :coachId", { coachId })
       .andWhere("cc.status IN (:...statuses)", { statuses: LIVE_STATUSES })
-      .andWhere("cc.isDeleted = :deleted", { deleted: false });
+      .andWhere("cc.isDeleted = :deleted", { deleted: false })
+      .andWhere("u.isDeleted = :clientDeleted", { clientDeleted: false });
   }
 
   private scopedByLiveClients(qb: SelectQueryBuilder<WorkoutStat>, coachId: string): SelectQueryBuilder<WorkoutStat> {
@@ -514,27 +644,56 @@ export class CoachDashboardService {
     return qb;
   }
 
+  /**
+   * Projection workers remove soft-deleted source workouts asynchronously. The
+   * dashboard joins the source row so a deleted workout disappears immediately,
+   * while a synced workout becomes visible as soon as its projection lands.
+   */
+  private onlyLiveWorkoutStats(qb: SelectQueryBuilder<WorkoutStat>): SelectQueryBuilder<WorkoutStat> {
+    return qb
+      .innerJoin(Workout, "sourceWorkout", "sourceWorkout.id = ws.workoutId AND sourceWorkout.userId = ws.userId")
+      .andWhere("ws.isDeleted = :projectionDeleted", { projectionDeleted: false })
+      .andWhere("sourceWorkout.isDeleted = :workoutDeleted", { workoutDeleted: false })
+      .andWhere("sourceWorkout.deletedAt IS NULL");
+  }
+
+  private onlyLivePersonalRecords(qb: SelectQueryBuilder<PersonalRecord>): SelectQueryBuilder<PersonalRecord> {
+    return qb
+      .innerJoin(Workout, "sourceWorkout", "sourceWorkout.id = pr.workoutId AND sourceWorkout.userId = pr.userId")
+      .andWhere("pr.isDeleted = :recordDeleted", { recordDeleted: false })
+      .andWhere("sourceWorkout.isDeleted = :workoutDeleted", { workoutDeleted: false })
+      .andWhere("sourceWorkout.deletedAt IS NULL");
+  }
+
+  private onlyLiveWorkoutExerciseStats(qb: SelectQueryBuilder<WorkoutExerciseStat>): SelectQueryBuilder<WorkoutExerciseStat> {
+    return qb
+      .innerJoin(Workout, "sourceWorkout", "sourceWorkout.id = wes.workoutId AND sourceWorkout.userId = wes.userId")
+      .andWhere("wes.isDeleted = :projectionDeleted", { projectionDeleted: false })
+      .andWhere("sourceWorkout.isDeleted = :workoutDeleted", { workoutDeleted: false })
+      .andWhere("sourceWorkout.deletedAt IS NULL");
+  }
+
   private groupedWindowStatsCte(coachId: string, from: Date): Promise<Map<string, ClientStatAgg>> {
-    const qb = this.scopedByLiveClients(this.workoutStatsRepo.createQueryBuilder("ws"), coachId);
+    const qb = this.onlyLiveWorkoutStats(this.scopedByLiveClients(this.workoutStatsRepo.createQueryBuilder("ws"), coachId));
     this.groupedStatsSelect(qb);
     return this.executeGroupedStats(qb.andWhere("ws.startedAt >= :from", { from }));
   }
 
   private groupedTotalStatsCte(coachId: string): Promise<Map<string, ClientStatAgg>> {
-    const qb = this.scopedByLiveClients(this.workoutStatsRepo.createQueryBuilder("ws"), coachId);
+    const qb = this.onlyLiveWorkoutStats(this.scopedByLiveClients(this.workoutStatsRepo.createQueryBuilder("ws"), coachId));
     this.groupedStatsSelect(qb);
     return this.executeGroupedStats(qb);
   }
 
   private groupedWindowStats(clientIds: string[], from: Date): Promise<Map<string, ClientStatAgg>> {
-    const qb = this.workoutStatsRepo.createQueryBuilder("ws");
+    const qb = this.onlyLiveWorkoutStats(this.workoutStatsRepo.createQueryBuilder("ws"));
     qb.where("ws.userId IN (:...clientIds)", { clientIds }).andWhere("ws.startedAt >= :from", { from });
     this.groupedStatsSelect(qb);
     return this.executeGroupedStats(qb);
   }
 
   private groupedTotalStats(clientIds: string[]): Promise<Map<string, ClientStatAgg>> {
-    const qb = this.workoutStatsRepo.createQueryBuilder("ws");
+    const qb = this.onlyLiveWorkoutStats(this.workoutStatsRepo.createQueryBuilder("ws"));
     qb.where("ws.userId IN (:...clientIds)", { clientIds });
     this.groupedStatsSelect(qb);
     return this.executeGroupedStats(qb);
@@ -569,47 +728,44 @@ export class CoachDashboardService {
       .groupBy("ws.userId");
   }
 
-  /** Distinct (client, calendar day) pairs for the window — one bounded query. */
-  private async workoutDayKeys(clientIds: string[], from: Date): Promise<Map<string, Set<string>>> {
+  /** Logged-workout counts by (client, UTC calendar day) for the window. */
+  private async workoutDayCounts(clientIds: string[], from: Date): Promise<Map<string, Map<string, number>>> {
     if (clientIds.length === 0) return new Map();
-    const qb = this.workoutStatsRepo
-      .createQueryBuilder("ws")
+    const qb = this.onlyLiveWorkoutStats(this.workoutStatsRepo.createQueryBuilder("ws"))
       .select("ws.userId", "userId")
       .addSelect("to_char(ws.startedAt, 'YYYY-MM-DD')", "day")
+      .addSelect("COUNT(*)", "workoutCount")
       .where("ws.userId IN (:...clientIds)", { clientIds })
       .andWhere("ws.startedAt >= :from", { from })
       .groupBy("ws.userId")
       .addGroupBy("to_char(ws.startedAt, 'YYYY-MM-DD')");
-    const rows = await qb.getRawMany<{ userId: string; day: string }>();
-    const map = new Map<string, Set<string>>();
-    for (const r of rows) {
-      const set = map.get(r.userId) ?? new Set<string>();
-      set.add(r.day);
-      map.set(r.userId, set);
-    }
-    return map;
+    return this.executeWorkoutDayCounts(qb);
   }
 
-  private async coachWorkoutDays(coachId: string, from: Date): Promise<Map<string, Set<string>>> {
-    const qb = this.workoutStatsRepo.createQueryBuilder("ws");
-    this.scopedByLiveClients(qb, coachId);
-    qb.select("ws.userId", "userId")
+  private async coachWorkoutDays(coachId: string, from: Date): Promise<Map<string, Map<string, number>>> {
+    const qb = this.onlyLiveWorkoutStats(this.scopedByLiveClients(this.workoutStatsRepo.createQueryBuilder("ws"), coachId))
+      .select("ws.userId", "userId")
       .addSelect("to_char(ws.startedAt, 'YYYY-MM-DD')", "day")
+      .addSelect("COUNT(*)", "workoutCount")
       .andWhere("ws.startedAt >= :from", { from })
       .groupBy("ws.userId")
       .addGroupBy("to_char(ws.startedAt, 'YYYY-MM-DD')");
-    const rows = await qb.getRawMany<{ userId: string; day: string }>();
-    const map = new Map<string, Set<string>>();
-    for (const r of rows) {
-      const set = map.get(r.userId) ?? new Set<string>();
-      set.add(r.day);
-      map.set(r.userId, set);
+    return this.executeWorkoutDayCounts(qb);
+  }
+
+  private async executeWorkoutDayCounts(qb: SelectQueryBuilder<WorkoutStat>): Promise<Map<string, Map<string, number>>> {
+    const rows = await qb.getRawMany<WorkoutDayRow>();
+    const map = new Map<string, Map<string, number>>();
+    for (const row of rows) {
+      const days = map.get(row.userId) ?? new Map<string, number>();
+      days.set(row.day, this.num(row.workoutCount));
+      map.set(row.userId, days);
     }
     return map;
   }
 
   private async prCountsCte(coachId: string, from: Date): Promise<Map<string, number>> {
-    const qb = this.prRepo.createQueryBuilder("pr");
+    const qb = this.onlyLivePersonalRecords(this.prRepo.createQueryBuilder("pr"));
     const cte = this.liveClientCte(coachId);
     qb.select("pr.userId", "userId")
       .addSelect("COUNT(*)", "count")
@@ -623,8 +779,7 @@ export class CoachDashboardService {
 
   private async prCountsForClients(clientIds: string[], from: Date): Promise<Map<string, number>> {
     if (clientIds.length === 0) return new Map();
-    const qb = this.prRepo
-      .createQueryBuilder("pr")
+    const qb = this.onlyLivePersonalRecords(this.prRepo.createQueryBuilder("pr"))
       .select("pr.userId", "userId")
       .addSelect("COUNT(*)", "count")
       .where("pr.userId IN (:...clientIds)", { clientIds })
@@ -636,8 +791,7 @@ export class CoachDashboardService {
 
   private coachActivityQuery(coachId: string) {
     const ct = this.liveClientCte(coachId);
-    return this.workoutStatsRepo
-      .createQueryBuilder("ws")
+    return this.onlyLiveWorkoutStats(this.workoutStatsRepo.createQueryBuilder("ws"))
       .select("ws.workoutId", "workoutId")
       .addSelect("ws.userId", "clientId")
       .addSelect("ws.name", "name")
@@ -648,11 +802,11 @@ export class CoachDashboardService {
       .addSelect("ws.setCount", "setCount")
       .addSelect("ws.exerciseCount", "exerciseCount")
       .addSelect("u.name", "clientName")
-      .innerJoin(CoachClientRelationship, "cc", "cc.client_id = ws.user_id AND cc.isDeleted = false AND cc.coach_id = :coachId", { coachId })
-      .innerJoin(User, "u", "u.id = ws.user_id")
+      .innerJoin(User, "u", "u.id = ws.userId")
       .addCommonTableExpression(ct, "coach_live_clients")
-      .where("ws.userId IN (SELECT clc.client_id FROM coach_live_clients clc) AND cc.status IN (:...statuses)", { statuses: LIVE_STATUSES })
-      .orderBy("ws.startedAt", "DESC");
+      .where("ws.userId IN (SELECT clc.client_id FROM coach_live_clients clc)")
+      .orderBy("ws.startedAt", "DESC")
+      .addOrderBy("ws.workoutId", "DESC");
   }
 
   private async coachRecentWorkouts(coachId: string, limit: number): Promise<ClientActivityEntryDto[]> {
@@ -662,23 +816,28 @@ export class CoachDashboardService {
 
   private async coachRecentPrs(coachId: string, limit: number): Promise<RecentPrDto[]> {
     const cte = this.liveClientCte(coachId);
-    const rows = await this.prRepo
-      .createQueryBuilder("pr")
-      .select("pr.prType", "prType")
+    const qb = this.onlyLivePersonalRecords(this.prRepo.createQueryBuilder("pr"));
+    const rows = await qb
+      .select("pr.userId", "clientId")
+      .addSelect("u.name", "clientName")
+      .addSelect("pr.prType", "prType")
       .addSelect("pr.value", "value")
       .addSelect("pr.exerciseId", "exerciseId")
       .addSelect("pr.exerciseName", "exerciseName")
       .addSelect("pr.workoutId", "workoutId")
-      .addSelect("pr.workoutExerciseId", "workoutExerciseId")
       .addSelect("pr.achievedAt", "achievedAt")
+      .innerJoin(User, "u", "u.id = pr.userId")
       .addCommonTableExpression(cte, "coach_live_clients")
       .where("pr.userId IN (SELECT clc.client_id FROM coach_live_clients clc)")
       .orderBy("pr.achievedAt", "DESC")
+      .addOrderBy("pr.id", "DESC")
       .limit(limit)
-      .getRawMany<RecentPrDto & { workoutExerciseId: string }>();
+      .getRawMany<RecentPrRow>();
     return rows.map((r) => ({
+      clientId: r.clientId,
+      clientName: r.clientName,
       prType: r.prType,
-      value: Number(r.value),
+      value: this.num(r.value),
       exerciseId: r.exerciseId,
       exerciseName: r.exerciseName,
       workoutId: r.workoutId,
@@ -687,15 +846,12 @@ export class CoachDashboardService {
   }
 
   private async coachTrends(coachId: string, weeks: number): Promise<ProgressTrendEntryDto[]> {
-    const cte = this.liveClientCte(coachId);
     const trendStart = new Date(Date.now() - weeks * WEEK_MS);
-    const rows = await this.workoutStatsRepo
-      .createQueryBuilder("ws")
+    const qb = this.onlyLiveWorkoutStats(this.scopedByLiveClients(this.workoutStatsRepo.createQueryBuilder("ws"), coachId));
+    const rows = await qb
       .select("date_trunc('week', ws.startedAt)", "bucket")
       .addSelect("COUNT(*)", "workoutCount")
       .addSelect("COALESCE(SUM(ws.volumeKg), 0)", "volumeKg")
-      .addCommonTableExpression(cte, "coach_live_clients")
-      .where("ws.userId IN (SELECT clc.client_id FROM coach_live_clients clc)")
       .andWhere("ws.startedAt >= :trendStart", { trendStart })
       .groupBy("bucket")
       .orderBy("bucket", "ASC")
@@ -706,8 +862,8 @@ export class CoachDashboardService {
   // ─── Single-client queries ───────────────────────────────────────────────
 
   private async clientRecentWorkouts(clientId: string, limit: number): Promise<RecentWorkoutDto[]> {
-    const rows = await this.workoutStatsRepo
-      .createQueryBuilder("ws")
+    const qb = this.onlyLiveWorkoutStats(this.workoutStatsRepo.createQueryBuilder("ws"));
+    const rows = await qb
       .select("ws.workoutId", "workoutId")
       .addSelect("ws.name", "name")
       .addSelect("ws.startedAt", "startedAt")
@@ -718,6 +874,7 @@ export class CoachDashboardService {
       .addSelect("ws.exerciseCount", "exerciseCount")
       .where("ws.userId = :clientId", { clientId })
       .orderBy("ws.startedAt", "DESC")
+      .addOrderBy("ws.workoutId", "DESC")
       .limit(limit)
       .getRawMany<RecentWorkoutDto & { volumeKg: string | number; reps: string | number; setCount: string | number; exerciseCount: string | number }>();
     return rows.map((r) => ({
@@ -737,48 +894,72 @@ export class CoachDashboardService {
       .createQueryBuilder("es")
       .select(["es.exerciseId", "es.exerciseName", "es.workoutCount", "es.totalVolumeKg", "es.lastPerformedAt", "es.bestWeightKg", "es.bestEstimated1RmKg", "es.bestReps"])
       .where("es.userId = :clientId", { clientId })
+      .andWhere("es.isDeleted = :projectionDeleted", { projectionDeleted: false })
+      .andWhere("es.deletedAt IS NULL")
       .orderBy("es.lastPerformedAt", "DESC")
+      .addOrderBy("es.exerciseId", "DESC")
       .take(PROGRESSION_TOP_EXERCISES)
       .getMany();
 
     const exerciseIds = [...new Set(top.map((e) => e.exerciseId))];
     if (exerciseIds.length === 0) return [];
 
-    const sessions = await this.weStatsRepo
-      .createQueryBuilder("wes")
-      .select(["wes.exerciseId", "wes.startedAt", "wes.bestWeightKg", "wes.bestEstimated1RmKg", "wes.bestReps", "wes.volumeKg"])
+    const rankedSessions = this.onlyLiveWorkoutExerciseStats(this.weStatsRepo.createQueryBuilder("wes"))
+      .select("wes.exerciseId", "exerciseId")
+      .addSelect("wes.startedAt", "startedAt")
+      .addSelect("wes.bestWeightKg", "bestWeightKg")
+      .addSelect("wes.bestEstimated1RmKg", "bestEstimated1RmKg")
+      .addSelect("wes.bestReps", "bestReps")
+      .addSelect("wes.volumeKg", "volumeKg")
+      .addSelect("ROW_NUMBER() OVER (PARTITION BY wes.exerciseId ORDER BY wes.startedAt DESC, wes.workoutId DESC)", "sessionRank")
       .where("wes.userId = :clientId", { clientId })
-      .andWhere("wes.exerciseId IN (:...exerciseIds)", { exerciseIds })
-      .orderBy("wes.startedAt", "DESC")
-      .take(PROGRESSION_SESSION_CAP)
-      .getMany();
+      .andWhere("wes.exerciseId IN (:...exerciseIds)", { exerciseIds });
+
+    const sessions = await this.weStatsRepo
+      .createQueryBuilder()
+      .select("ranked.exerciseId", "exerciseId")
+      .addSelect("ranked.startedAt", "startedAt")
+      .addSelect("ranked.bestWeightKg", "bestWeightKg")
+      .addSelect("ranked.bestEstimated1RmKg", "bestEstimated1RmKg")
+      .addSelect("ranked.bestReps", "bestReps")
+      .addSelect("ranked.volumeKg", "volumeKg")
+      .from(`(${rankedSessions.getQuery()})`, "ranked")
+      .setParameters(rankedSessions.getParameters())
+      .where("ranked.sessionRank <= :sessionLimit", { sessionLimit: recentLimit })
+      .orderBy("ranked.startedAt", "DESC")
+      .addOrderBy("ranked.exerciseId", "ASC")
+      .getRawMany<{
+        exerciseId: string;
+        startedAt: Date;
+        bestWeightKg: number | null;
+        bestEstimated1RmKg: number | null;
+        bestReps: number | null;
+        volumeKg: string | number;
+      }>();
 
     const byExercise = new Map<string, ExerciseSessionSnapshotDto[]>();
-    for (const s of sessions) {
-      if (!s.exerciseId) continue;
-      const list = byExercise.get(s.exerciseId) ?? [];
-      if (list.length < recentLimit) {
-        list.push({
-          startedAt: s.startedAt,
-          bestWeightKg: s.bestWeightKg,
-          bestEstimated1RmKg: s.bestEstimated1RmKg,
-          bestReps: s.bestReps,
-          volumeKg: s.volumeKg
-        });
-      }
-      byExercise.set(s.exerciseId, list);
+    for (const session of sessions) {
+      const list = byExercise.get(session.exerciseId) ?? [];
+      list.push({
+        startedAt: session.startedAt,
+        bestWeightKg: session.bestWeightKg,
+        bestEstimated1RmKg: session.bestEstimated1RmKg,
+        bestReps: session.bestReps,
+        volumeKg: this.num(session.volumeKg)
+      });
+      byExercise.set(session.exerciseId, list);
     }
 
-    return top.map((e) => ({
-      exerciseId: e.exerciseId,
-      exerciseName: e.exerciseName,
-      lastPerformedAt: e.lastPerformedAt,
-      workoutCount: e.workoutCount,
-      totalVolumeKg: e.totalVolumeKg,
-      bestWeightKg: e.bestWeightKg,
-      bestEstimated1RmKg: e.bestEstimated1RmKg,
-      bestReps: e.bestReps,
-      recentSessions: byExercise.get(e.exerciseId) ?? []
+    return top.map((exercise) => ({
+      exerciseId: exercise.exerciseId,
+      exerciseName: exercise.exerciseName,
+      lastPerformedAt: exercise.lastPerformedAt,
+      workoutCount: exercise.workoutCount,
+      totalVolumeKg: exercise.totalVolumeKg,
+      bestWeightKg: exercise.bestWeightKg,
+      bestEstimated1RmKg: exercise.bestEstimated1RmKg,
+      bestReps: exercise.bestReps,
+      recentSessions: byExercise.get(exercise.exerciseId) ?? []
     }));
   }
 
@@ -788,58 +969,75 @@ export class CoachDashboardService {
     coachId: string,
     clientIds: string[],
     window: ScoutWindow,
-    workoutDaysByClient: Map<string, Set<string>>,
-    windowStatsByClient: Map<string, ClientStatAgg>
+    workoutDaysByClient: Map<string, Map<string, number>>,
+    windowStatsByClient: Map<string, ClientStatAgg>,
+    includeMissedDetails = false
   ): Promise<Map<string, AssignmentMetrics>> {
     const result = new Map<string, AssignmentMetrics>();
     if (clientIds.length === 0) return result;
 
     const assignments = await this.assignmentRepo.find({
-      where: { coachId, clientId: In(clientIds), isActive: true, isDeleted: false },
+      where: {
+        coachId,
+        clientId: In(clientIds),
+        status: In(ACTIVE_ASSIGNMENT_STATUSES),
+        isActive: true,
+        isDeleted: false,
+        endDate: Or(IsNull(), MoreThanOrEqual(window.start))
+      },
       select: { id: true, programId: true, clientId: true, startDate: true, endDate: true, status: true }
     });
     if (assignments.length === 0) return result;
 
-    const programIds = [...new Set(assignments.map((a) => a.programId))];
-    const [programs, days] = await Promise.all([
-      this.programRepo.find({ where: { id: In(programIds) }, select: { id: true, name: true } }),
-      this.dayRepo.find({
-        where: { programId: In(programIds) },
-        select: { id: true, programId: true, weekNumber: true, dayNumber: true, orderIndex: true, name: true },
-        order: { weekNumber: "ASC", dayNumber: "ASC", orderIndex: "ASC" }
-      })
-    ]);
+    const candidateProgramIds = [...new Set(assignments.map((assignment) => assignment.programId))];
+    const programs = await this.programRepo.find({
+      where: { id: In(candidateProgramIds), coachId, isActive: true, isDeleted: false, deletedAt: IsNull() },
+      select: { id: true, name: true }
+    });
+    const programIds = new Set(programs.map((program) => program.id));
+    if (programIds.size === 0) return result;
 
-    const dayIds = days.map((d) => d.id);
+    const days = await this.dayRepo.find({
+      where: { programId: In([...programIds]), isDeleted: false, deletedAt: IsNull() },
+      select: { id: true, programId: true, weekNumber: true, dayNumber: true, orderIndex: true, name: true },
+      order: { weekNumber: "ASC", dayNumber: "ASC", orderIndex: "ASC" }
+    });
+    const dayIds = days.map((day) => day.id);
     const workouts =
-      dayIds.length > 0 ? await this.workoutRepo.find({ where: { programDayId: In(dayIds) }, select: { id: true, programDayId: true, name: true, orderIndex: true } }) : [];
+      dayIds.length > 0
+        ? await this.workoutRepo.find({
+            where: { programDayId: In(dayIds), isDeleted: false, deletedAt: IsNull() },
+            select: { id: true, programDayId: true, name: true, orderIndex: true },
+            order: { orderIndex: "ASC" }
+          })
+        : [];
 
     const workoutsByDay = new Map<string, ProgramWorkout[]>();
-    for (const w of workouts) {
-      const list = workoutsByDay.get(w.programDayId) ?? [];
-      list.push(w);
-      workoutsByDay.set(w.programDayId, list);
+    for (const workout of workouts) {
+      const list = workoutsByDay.get(workout.programDayId) ?? [];
+      list.push(workout);
+      workoutsByDay.set(workout.programDayId, list);
     }
 
-    const programName = new Map(programs.map((p) => [p.id, p.name]));
+    const programNames = new Map(programs.map((program) => [program.id, program.name]));
     const daysByProgram = new Map<string, ProgramDay[]>();
-    for (const d of days) {
-      const list = daysByProgram.get(d.programId) ?? [];
-      list.push(d);
-      daysByProgram.set(d.programId, list);
+    for (const day of days) {
+      const list = daysByProgram.get(day.programId) ?? [];
+      list.push(day);
+      daysByProgram.set(day.programId, list);
     }
 
-    const bundlesByClient = new Map<string, { assignment: ProgramAssignment; programName: string; sched: BundleRelations[] }[]>();
-    for (const assignment of assignments) {
-      const sched = (daysByProgram.get(assignment.programId) ?? []).map((day) => ({
+    const bundlesByClient = new Map<string, { assignment: ProgramAssignment; programName: string; schedule: BundleRelations[] }[]>();
+    for (const assignment of assignments.filter((candidate) => programIds.has(candidate.programId))) {
+      const schedule = (daysByProgram.get(assignment.programId) ?? []).map((day) => ({
         day,
         scheduledDate: this.scheduledDate(assignment.startDate, day.weekNumber, day.dayNumber),
         workouts: workoutsByDay.get(day.id) ?? []
       }));
       const bundle = {
         assignment,
-        programName: programName.get(assignment.programId) ?? "Unknown Program",
-        sched: sched.sort((a, b) => a.scheduledDate.getTime() - b.scheduledDate.getTime())
+        programName: programNames.get(assignment.programId) ?? "Unknown Program",
+        schedule: schedule.sort((a, b) => a.scheduledDate.getTime() - b.scheduledDate.getTime())
       };
       const list = bundlesByClient.get(assignment.clientId) ?? [];
       list.push(bundle);
@@ -848,8 +1046,16 @@ export class CoachDashboardService {
 
     for (const [clientId, bundles] of bundlesByClient) {
       const sorted = bundles.slice().sort((a, b) => this.assignmentRank(a, b));
-      const metricsList = sorted.map((b) =>
-        this.computeAssignmentMetrics(b.assignment, b.programName, b.sched, workoutDaysByClient.get(clientId) ?? new Set(), window, windowStatsByClient.get(clientId))
+      // One shared credit pool per client. A client may legitimately hold two
+      // live assignments for different programs (the partial unique index only
+      // guards one assignment per (program, client)), and those plans can fall
+      // on the same calendar day. Without a shared pool each plan would claim
+      // the same logged workout and report 100% adherence for a day the client
+      // trained once. Credits are consumed highest-priority assignment first,
+      // earliest slot first, so the result stays deterministic.
+      const budget = this.dayCreditBudget(workoutDaysByClient.get(clientId));
+      const metricsList = sorted.map((bundle) =>
+        this.computeAssignmentMetrics(bundle.assignment, bundle.programName, bundle.schedule, budget, window, windowStatsByClient.get(clientId), includeMissedDetails)
       );
       result.set(clientId, this.mergeMetrics(metricsList));
     }
@@ -864,57 +1070,76 @@ export class CoachDashboardService {
     return b.assignment.startDate.getTime() - a.assignment.startDate.getTime();
   }
 
+  /**
+   * Mutable per-client pool of logged workouts available to satisfy scheduled
+   * slots, keyed by calendar day. `take` is the only way to spend from it, so a
+   * credit can never be counted twice across overlapping plans.
+   */
+  private dayCreditBudget(countsByDay: Map<string, number> | undefined): DayCreditBudget {
+    const remaining = new Map<string, number>(countsByDay ?? []);
+    return {
+      take: (dateKey: string, slots: number): number => {
+        const available = remaining.get(dateKey) ?? 0;
+        const used = Math.min(available, slots);
+        if (used > 0) remaining.set(dateKey, available - used);
+        return used;
+      }
+    };
+  }
+
   private mergeMetrics(metricsList: AssignmentMetrics[]): AssignmentMetrics {
-    let expectedTrainingDays = 0;
-    let completedTrainingDays = 0;
-    const missedDetails: MissedWorkoutDto[] = [];
-    for (const m of metricsList) {
-      expectedTrainingDays += m.expectedTrainingDays;
-      completedTrainingDays += m.completedTrainingDays;
-      missedDetails.push(...m.missedDetails);
-    }
-    const missedWorkouts = metricsList.reduce((acc, m) => acc + m.missedWorkouts, 0);
+    const expectedTrainingDays = metricsList.reduce((total, metrics) => total + metrics.expectedTrainingDays, 0);
+    const completedTrainingDays = metricsList.reduce((total, metrics) => total + metrics.completedTrainingDays, 0);
+    const missedWorkouts = metricsList.reduce((total, metrics) => total + metrics.missedWorkouts, 0);
+    const summaries = metricsList.map((metrics) => metrics.primarySummary);
     return {
       expectedTrainingDays,
       completedTrainingDays,
       missedWorkouts,
-      missedDetails,
-      primarySummary: metricsList[0].primarySummary
+      missedDetails: metricsList.flatMap((metrics) => metrics.missedDetails),
+      primarySummary: summaries[0],
+      summaries
     };
   }
 
   private computeAssignmentMetrics(
     assignment: ProgramAssignment,
     programName: string,
-    sched: BundleRelations[],
-    workoutDates: Set<string>,
+    schedule: BundleRelations[],
+    creditBudget: DayCreditBudget,
     window: ScoutWindow,
-    windowStats: ClientStatAgg | undefined
+    windowStats: ClientStatAgg | undefined,
+    includeMissedDetails: boolean
   ): AssignmentMetrics {
     const isActivePlan = assignment.status === ProgramAssignmentStatus.ACTIVE;
-    const totalPlannedWorkouts = sched.reduce((acc, d) => acc + d.workouts.length, 0);
-    const due = sched.filter((d) => d.scheduledDate <= window.today && d.scheduledDate >= window.start);
-    const dueDays = due.length;
-    const scheduledWorkouts = due.reduce((acc, d) => acc + d.workouts.length, 0);
+    const totalPlannedWorkouts = schedule.reduce((total, day) => total + day.workouts.length, 0);
+    const endDateKey = assignment.endDate ? this.dateKey(assignment.endDate) : null;
+    const due = schedule.filter(
+      (day) => day.workouts.length > 0 && day.scheduledDate >= window.start && day.scheduledDate <= window.today && (!endDateKey || this.dateKey(day.scheduledDate) <= endDateKey)
+    );
+    const scheduledWorkouts = due.reduce((total, day) => total + day.workouts.length, 0);
 
     let completedWorkouts = 0;
     let completedTrainingDays = 0;
     const missedDetails: MissedWorkoutDto[] = [];
-    for (const d of due) {
-      const completed = workoutDates.has(this.dateKey(d.scheduledDate));
-      if (completed) {
-        completedWorkouts += d.workouts.length;
-        completedTrainingDays += 1;
-      } else if (isActivePlan) {
-        for (const w of d.workouts) {
+    for (const day of due) {
+      const completedForDay = creditBudget.take(this.dateKey(day.scheduledDate), day.workouts.length);
+      completedWorkouts += completedForDay;
+      if (completedForDay > 0) completedTrainingDays += 1;
+
+      if (isActivePlan && includeMissedDetails) {
+        for (const workout of day.workouts.slice(completedForDay)) {
           missedDetails.push({
-            dayId: d.day.id,
-            weekNumber: d.day.weekNumber,
-            dayNumber: d.day.dayNumber,
-            dayName: d.day.name,
-            scheduledDate: d.scheduledDate,
-            workoutId: w.id,
-            workoutName: w.name
+            assignmentId: assignment.id,
+            programId: assignment.programId,
+            programName,
+            dayId: day.day.id,
+            weekNumber: day.day.weekNumber,
+            dayNumber: day.day.dayNumber,
+            dayName: day.day.name,
+            scheduledDate: day.scheduledDate,
+            workoutId: workout.id,
+            workoutName: workout.name
           });
         }
       }
@@ -922,43 +1147,48 @@ export class CoachDashboardService {
 
     const missedWorkouts = isActivePlan ? scheduledWorkouts - completedWorkouts : 0;
     const percentComplete = scheduledWorkouts > 0 ? Math.round((completedWorkouts / scheduledWorkouts) * 100) : 0;
+    const primarySummary: ProgramProgressSummaryDto = {
+      assignmentId: assignment.id,
+      programId: assignment.programId,
+      programName,
+      clientId: assignment.clientId,
+      startDate: assignment.startDate,
+      endDate: assignment.endDate,
+      status: assignment.status,
+      totalPlannedWorkouts,
+      scheduledWorkouts,
+      completedWorkouts,
+      percentComplete,
+      missedWorkouts,
+      loggedWorkoutCount: windowStats?.workoutCount ?? 0,
+      volumeKg: windowStats?.volumeKg ?? 0
+    };
 
     return {
-      expectedTrainingDays: isActivePlan ? dueDays : 0,
+      expectedTrainingDays: isActivePlan ? due.length : 0,
       completedTrainingDays: isActivePlan ? completedTrainingDays : 0,
       missedWorkouts,
       missedDetails,
-      primarySummary: {
-        assignmentId: assignment.id,
-        programId: assignment.programId,
-        programName,
-        clientId: assignment.clientId,
-        startDate: assignment.startDate,
-        endDate: assignment.endDate,
-        status: assignment.status,
-        totalPlannedWorkouts,
-        scheduledWorkouts,
-        completedWorkouts,
-        percentComplete,
-        missedWorkouts,
-        loggedWorkoutCount: windowStats?.workoutCount ?? 0,
-        volumeKg: windowStats?.volumeKg ?? 0
-      }
+      primarySummary,
+      summaries: [primarySummary]
     };
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   private async requireCoach(user: User): Promise<Coach> {
-    const coach = await this.coachRepo.findOne({ where: { userId: user.id } });
+    const coach = await this.coachRepo.findOne({ where: { userId: user.id, isDeleted: false } });
     if (!coach) throw new ForbiddenException("You do not have a coach profile");
     return coach;
   }
 
   private resolveWindow(windowDays: number | undefined, cap: number, fallback: number): ScoutWindow {
     const days = typeof windowDays === "number" && Number.isFinite(windowDays) && windowDays >= 1 ? Math.min(Math.floor(windowDays), cap) : fallback;
-    const today = new Date();
-    return { days, start: new Date(today.getTime() - days * DAY_MS), today };
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const start = new Date(today);
+    start.setUTCDate(start.getUTCDate() - (days - 1));
+    return { days, start, today };
   }
 
   private resolveWeeks(weeks: number | undefined): number {
@@ -984,14 +1214,28 @@ export class CoachDashboardService {
     };
   }
 
+  private toPendingRequest(row: PendingRequestRow): PendingRequestDto {
+    return {
+      relationshipId: row.relationshipId,
+      createdAt: row.createdAt,
+      client: { id: row.clientId, name: row.clientName, email: row.clientEmail }
+    };
+  }
+
   private scheduledDate(startDate: Date, weekNumber: number, dayNumber: number): Date {
     const addDays = (weekNumber - 1) * 7 + (dayNumber - 1);
-    return new Date(startDate.getTime() + addDays * DAY_MS);
+    return new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate() + addDays));
   }
 
   /** UTC calendar date key (YYYY-MM-DD) — matches `to_char(...)` in SQL. */
   private dateKey(date: Date): string {
     return new Date(date).toISOString().slice(0, 10);
+  }
+
+  /** Whole UTC calendar days from `from` to `to` (never negative). */
+  private daysBetween(from: Date, to: Date): number {
+    const ms = new Date(to).getTime() - new Date(from).getTime();
+    return Math.max(0, Math.floor(ms / DAY_MS));
   }
 
   private num(value: string | number | null | undefined): number {
