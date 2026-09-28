@@ -10,6 +10,7 @@ import { User } from "../users/entities/user.entity";
 import { SyncChange } from "../sync/entities/sync-change.entity";
 import { resolveWinner, isIdempotentReplay } from "./workout-conflict.util";
 import { createPaginatedResponse } from "src/common/dto";
+import { buildIdempotencyKey, DomainAggregateType, DomainEventPublisher, DomainEventType, WorkoutCompletedEvent } from "src/common/events";
 import {
   ExerciseHistoryEntryDto,
   ExerciseHistoryQueryDto,
@@ -31,6 +32,13 @@ import { WorkoutSyncChangeItem, SyncApplyAccepted, SyncApplyRejected, SyncApplyC
  * The `apply*Change(manager, ...)` methods participate in a caller-owned
  * transaction (managed by SyncModule) so persistence plus the sync changelog
  * commit atomically.
+ *
+ * A finished workout also announces itself, via `DomainEventPublisher` — the
+ * outbox row is written **inside the same transaction**, so a committed workout
+ * always has its event and a rolled-back one never leaves it behind. That
+ * publisher performs a single INSERT and no provider I/O, which is what makes
+ * "a failed notification cannot fail the workout write" true by construction.
+ * Nothing here knows what a channel, a template or a provider is.
  */
 @Injectable()
 export class WorkoutService {
@@ -41,7 +49,8 @@ export class WorkoutService {
     @InjectRepository(WorkoutExercise) private readonly workoutExercisesRepo: Repository<WorkoutExercise>,
     @InjectRepository(Set) private readonly setsRepo: Repository<Set>,
     @InjectRepository(Exercise) private readonly exercisesRepo: Repository<Exercise>,
-    private readonly exerciseService: ExerciseService
+    private readonly exerciseService: ExerciseService,
+    private readonly eventPublisher: DomainEventPublisher
   ) {}
 
   // ─── Offline-first change application (called inside the sync transaction) ─
@@ -117,6 +126,7 @@ export class WorkoutService {
         accepted.push({ entityType: "workout", id: item.id, revision: serverRevision });
         return;
       }
+      const wasCompleted = existing.endedAt !== null && existing.endedAt !== undefined;
       existing.name = (p.name as string) ?? existing.name;
       existing.notes = (p.notes as string) ?? existing.notes;
       if (p.startedAt) existing.startedAt = new Date(p.startedAt as string);
@@ -129,21 +139,72 @@ export class WorkoutService {
       existing.clientUpdatedAt = new Date(item.clientUpdatedAt);
       await manager.save(Workout, existing);
       await this.recordChange(manager, user.id, "workout", item.id, "update", existing.revision);
+      await this.announceCompletion(manager, user, existing, wasCompleted);
     } else {
+      const startedAt = new Date((p.startedAt as string) || item.clientUpdatedAt);
+      const endedAt = p.endedAt ? new Date(p.endedAt as string) : null;
       await manager.insert(Workout, {
         id: item.id,
         userId: user.id,
         name: (p.name as string) ?? null,
         notes: (p.notes as string) ?? null,
-        startedAt: new Date((p.startedAt as string) || item.clientUpdatedAt),
-        endedAt: p.endedAt ? new Date(p.endedAt as string) : null,
+        startedAt,
+        endedAt,
         durationSeconds: (p.durationSeconds as number) ?? null,
         revision: item.revision,
         clientUpdatedAt: new Date(item.clientUpdatedAt)
       });
       await this.recordChange(manager, user.id, "workout", item.id, "create", item.revision);
+      // A session that arrives already finished (the common case: a phone syncs
+      // once, offline, having recorded the whole session) has just been completed
+      // too — there was never an earlier "in progress" state to transition from.
+      await this.announceCompletion(
+        manager,
+        user,
+        { id: item.id, name: (p.name as string) ?? null, startedAt, endedAt, durationSeconds: (p.durationSeconds as number) ?? null },
+        false
+      );
     }
     accepted.push({ entityType: "workout", id: item.id, revision: item.revision });
+  }
+
+  /**
+   * Announces "this workout was finished", once per completion.
+   *
+   * Only the *transition* counts: an update that leaves an already-finished
+   * workout finished (a name correction, a note) must not re-notify a coach. The
+   * idempotency key carries `startedAt` so a replayed offline batch — the same
+   * session reported twice — collapses to one event even though it arrives
+   * through two separate writes, while a genuinely new session does not.
+   *
+   * The audience is resolved lazily by the notification layer, so this method
+   * never queries who coaches this athlete; it just says "this user, plus their
+   * active coaches, minus the athlete themselves".
+   */
+  private async announceCompletion(
+    manager: EntityManager,
+    user: User,
+    workout: { id: string; name: string | null; startedAt: Date; endedAt: Date | null; durationSeconds: number | null },
+    wasCompleted: boolean
+  ): Promise<void> {
+    if (wasCompleted || !workout.endedAt) return;
+
+    const event: WorkoutCompletedEvent = {
+      type: DomainEventType.WORKOUT_COMPLETED,
+      occurredAt: workout.endedAt,
+      idempotencyKey: buildIdempotencyKey(DomainEventType.WORKOUT_COMPLETED, workout.id, workout.startedAt.toISOString()),
+      actorId: user.id,
+      audience: { kind: "user_and_active_coach", userId: user.id, excludeActor: true },
+      aggregate: { type: DomainAggregateType.WORKOUT, id: workout.id },
+      payload: {
+        workoutId: workout.id,
+        workoutName: workout.name,
+        startedAt: workout.startedAt.toISOString(),
+        endedAt: workout.endedAt.toISOString(),
+        durationSeconds: workout.durationSeconds
+      }
+    };
+    await this.eventPublisher.publishInTransaction(manager, event);
   }
 
   async applyWorkoutExerciseChange(

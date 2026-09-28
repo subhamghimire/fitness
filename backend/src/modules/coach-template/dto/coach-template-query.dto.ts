@@ -17,7 +17,7 @@ export class CoachTemplateQueryDto extends PaginationQueryDto {
 
   @ApiPropertyOptional({ description: "Max price filter" })
   @IsOptional()
-  @Transform(({ value }) => parseFloat(value))
+  @Transform(({ value }) => parseFloat(String(value)))
   @IsNumber()
   @Min(0)
   maxPrice?: number;

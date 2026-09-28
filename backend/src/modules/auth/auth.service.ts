@@ -189,7 +189,7 @@ export class AuthService {
     return { message: "Password changed successfully" };
   }
 
-  async getProfile(user: User): Promise<{ user: UserResponseDto }> {
+  getProfile(user: User): { user: UserResponseDto } {
     return { user: this.toUserResponse(user) };
   }
 

@@ -2,7 +2,7 @@ import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus, Logge
 import { Response } from "express";
 import { ERROR_MESSAGE_CONFIG } from "src/common/error-message";
 
-type IErrorResponse = { message: string };
+type IErrorResponse = { message: string | string[] };
 interface IResponseJson {
   success: boolean;
   status: number;
@@ -19,13 +19,14 @@ export class AppExceptionFilter implements ExceptionFilter {
     const statusCode = exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
     if (exception instanceof HttpException) {
       const errResponse = exception.getResponse() as IErrorResponse | string;
+      const rawMessage = typeof errResponse === "object" ? errResponse.message : errResponse;
+      // Send the string value
+      const message = Array.isArray(rawMessage) ? rawMessage[0] : rawMessage;
       const responseJson = {
         success: false,
         status: statusCode,
-        message: typeof errResponse === "object" ? errResponse["message"] : errResponse
+        message
       };
-      // Send the string value
-      if (Array.isArray(responseJson.message)) responseJson.message = responseJson.message[0];
       this.logger(request, responseJson);
       response.status(statusCode).json(responseJson);
     } else {

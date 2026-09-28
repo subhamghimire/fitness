@@ -10,6 +10,7 @@ import { PersonalRecord } from "./entities/personal-record.entity";
 import { Workout } from "../workout/entities/workout.entity";
 import { WorkoutExercise } from "../workout/entities/workout-exercise.entity";
 import { Set as SetEntity } from "../workout/entities/set.entity";
+import { buildIdempotencyKey, DomainAggregateType, DomainEventPublisher, DomainEventType, PersonalRecordAchievedEvent } from "src/common/events";
 
 export interface ClaimedQueueRow {
   id: number;
@@ -58,12 +59,21 @@ export interface ProcessQueueResult {
  * All persistence goes through TypeORM's Data Mapper / QueryBuilder APIs (no
  * raw SQL strings) so the projection stays schema-safe under renames and
  * driver-portable.
+ *
+ * The projection is also a domain-event producer: a PR that appears for the
+ * first time is announced through `DomainEventPublisher`, written to the outbox
+ * in the *same* transaction as the projection. Announcing is a single INSERT
+ * with no provider I/O, so reprojection can never fail because a notification
+ * could not be sent.
  */
 @Injectable()
 export class ProgressProjectionService {
   private readonly logger = new Logger(ProgressProjectionService.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly eventPublisher: DomainEventPublisher
+  ) {}
 
   async processQueue(batchSize = 25): Promise<ProcessQueueResult> {
     await this.recoverStaleProcessingRows();
@@ -325,6 +335,14 @@ export class ProgressProjectionService {
     const events = detectPersonalRecords(rows);
     const latestName = rows.reduce((acc: string | null, r) => r.name ?? acc, null);
 
+    // The chain is rebuilt from scratch on every reprojection, so "a PR exists"
+    // is not new information — the *set* of PRs is. Read the previous set before
+    // deleting it, so the diff below can distinguish a genuinely new record from
+    // one that was already standing. Announcing all of them would re-notify a
+    // coach every time the athlete edited a note in an old session.
+    const previous = await manager.getRepository(PersonalRecord).find({ where: { userId, exerciseId }, select: { prType: true, workoutId: true } });
+    const previousKeys = new Set(previous.map((pr) => `${pr.prType}:${pr.workoutId}`));
+
     await manager.delete(ExerciseStat, { userId, exerciseId });
     await manager.delete(PersonalRecord, { userId, exerciseId });
 
@@ -347,6 +365,56 @@ export class ProgressProjectionService {
         }))
       );
     }
+
+    for (const event of events) {
+      if (previousKeys.has(`${event.prType}:${event.workoutId}`)) continue;
+      await this.announcePersonalRecord(manager, userId, {
+        exerciseId,
+        exerciseName: latestName,
+        prType: event.prType,
+        value: event.value,
+        workoutId: event.workoutId,
+        achievedAt: event.achievedAt
+      });
+    }
+  }
+
+  /**
+   * Announces a newly-achieved personal record.
+   *
+   * Keyed on `(exercise, PR type, workout)` rather than on the exercise: the
+   * projection regenerates the whole chain for an exercise on every mutation, so
+   * an exercise-scoped key would collapse a genuine second record on the same
+   * lift into the first. Because the diff above is stable under reprojection,
+   * re-running the projection re-publishes the same keys, which the outbox's
+   * unique index then discards — so at-least-once delivery upstream still yields
+   * exactly one notification.
+   *
+   * The audience includes the athlete themselves: a personal record is the one
+   * event a user wants to see in their own inbox, alongside their coaches'.
+   */
+  private async announcePersonalRecord(
+    manager: EntityManager,
+    userId: string,
+    record: { exerciseId: string | null; exerciseName: string | null; prType: PersonalRecordType; value: number; workoutId: string; achievedAt: Date }
+  ): Promise<void> {
+    const event: PersonalRecordAchievedEvent = {
+      type: DomainEventType.PERSONAL_RECORD_ACHIEVED,
+      occurredAt: record.achievedAt,
+      idempotencyKey: buildIdempotencyKey(DomainEventType.PERSONAL_RECORD_ACHIEVED, record.exerciseId ?? record.workoutId, `${record.prType}:${record.workoutId}`),
+      actorId: userId,
+      audience: { kind: "user_and_active_coach", userId, excludeActor: false },
+      aggregate: { type: DomainAggregateType.PERSONAL_RECORD, id: record.exerciseId ?? record.workoutId },
+      payload: {
+        exerciseId: record.exerciseId,
+        exerciseName: record.exerciseName,
+        prType: record.prType,
+        value: record.value,
+        workoutId: record.workoutId,
+        achievedAt: record.achievedAt.toISOString()
+      }
+    };
+    await this.eventPublisher.publishInTransaction(manager, event);
   }
 
   private buildExerciseStat(

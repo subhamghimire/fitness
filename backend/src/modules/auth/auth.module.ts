@@ -27,6 +27,9 @@ import { PasswordResetToken } from "./entities/password-reset-token.entity";
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
-  exports: [AuthService, JwtStrategy, PassportModule]
+  // `JwtModule` is exported so the messaging gateway can verify a socket's access
+  // token with the same secret this module signs with, rather than registering a
+  // second `JwtModule` that could drift (or arrive without a secret).
+  exports: [AuthService, JwtStrategy, PassportModule, JwtModule]
 })
 export class AuthModule {}

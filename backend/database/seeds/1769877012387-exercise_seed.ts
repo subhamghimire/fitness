@@ -5,7 +5,7 @@ import { Exercise } from "src/modules/exercise/entities/exercise.entity";
 export class ExerciseSeed1769877012387 implements Seeder {
   track = false;
 
-  public async run(dataSource: DataSource, factoryManager: SeederFactoryManager): Promise<void> {
+  public async run(dataSource: DataSource, _factoryManager: SeederFactoryManager): Promise<void> {
     const exerciseRepo = dataSource.getRepository(Exercise);
 
     const exercises: Partial<Exercise>[] = [

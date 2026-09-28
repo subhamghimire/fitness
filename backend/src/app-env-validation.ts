@@ -9,6 +9,12 @@ enum Environment {
   STAGING = "staging"
 }
 
+/**
+ * True when `DATABASE_URL` is absent, i.e. the individual Postgres fields
+ * (host/port/db/user/password) must be populated for a local connection.
+ */
+const requiresHostFields = (env: EnvironmentVariables): boolean => !env.DATABASE_URL;
+
 class EnvironmentVariables {
   @IsEnum(Environment)
   NODE_ENV: Environment;
@@ -33,27 +39,27 @@ class EnvironmentVariables {
   @IsString()
   DATABASE_URL?: string;
 
-  @ValidateIf((o) => !o.DATABASE_URL)
+  @ValidateIf(requiresHostFields)
   @IsString()
   @IsNotEmpty()
   DATABASE_HOST_ADDRESS?: string;
 
-  @ValidateIf((o) => !o.DATABASE_URL)
+  @ValidateIf(requiresHostFields)
   @Type(() => Number)
   @IsInt()
   DATABASE_PORT?: string;
 
-  @ValidateIf((o) => !o.DATABASE_URL)
+  @ValidateIf(requiresHostFields)
   @IsString()
   @IsNotEmpty()
   POSTGRES_DB?: string;
 
-  @ValidateIf((o) => !o.DATABASE_URL)
+  @ValidateIf(requiresHostFields)
   @IsString()
   @IsNotEmpty()
   POSTGRES_USER?: string;
 
-  @ValidateIf((o) => !o.DATABASE_URL)
+  @ValidateIf(requiresHostFields)
   @IsString()
   @IsNotEmpty()
   POSTGRES_PASSWORD?: string;
@@ -88,6 +94,33 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   GOOGLE_CLIENT_IDS?: string;
+
+  // ── Redis (notification job queue + Socket.IO adapter) ─────────────────────
+  // Required, not optional: `RedisConnectionFactory` reads it with
+  // `getOrThrow`, and it backs both the notification pipeline's background jobs
+  // and cross-instance WebSocket fan-out.
+  @IsString()
+  @IsNotEmpty()
+  REDIS_URL: string;
+
+  // ── Notification pipeline tuning (all optional) ───────────────────────────
+  /** Outbox rows claimed per relay tick. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  NOTIFICATION_RELAY_BATCH_SIZE?: number;
+
+  /** Outbox relay poll interval, milliseconds. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  NOTIFICATION_RELAY_POLL_MS?: number;
+
+  /** BullMQ attempts for the stage-2 "materialise notifications" job. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  NOTIFICATION_EVENT_JOB_ATTEMPTS?: number;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

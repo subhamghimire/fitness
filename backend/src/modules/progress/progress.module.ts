@@ -14,6 +14,7 @@ import { ProgressQueueItem } from "./entities/progress-queue-item.entity";
 import { Workout } from "../workout/entities/workout.entity";
 import { WorkoutExercise } from "../workout/entities/workout-exercise.entity";
 import { Set } from "../workout/entities/set.entity";
+import { NotificationsModule } from "../notifications/notifications.module";
 
 /**
  * PROGRESS / STATISTICS DOMAIN
@@ -23,9 +24,17 @@ import { Set } from "../workout/entities/set.entity";
  * worker. The only external coupling is the thin producer hook used by
  * SyncModule (`ProgressQueueService.enqueueWorkoutsInTransaction`) — the
  * projection itself is fully self-contained and never touches sync tables.
+ *
+ * `NotificationsModule` is imported for the `DomainEventPublisher` token alone,
+ * so a new personal record can be announced without this module knowing anything
+ * about channels, providers or notification types.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([WorkoutStat, WorkoutExerciseStat, ExerciseStat, PersonalRecord, ProgressQueueItem, Workout, WorkoutExercise, Set]), AuthModule],
+  imports: [
+    TypeOrmModule.forFeature([WorkoutStat, WorkoutExerciseStat, ExerciseStat, PersonalRecord, ProgressQueueItem, Workout, WorkoutExercise, Set]),
+    AuthModule,
+    NotificationsModule
+  ],
   controllers: [ProgressController],
   providers: [ProgressService, ProgressQueueService, ProgressProjectionService, ProgressQueueWorker],
   exports: [ProgressQueueService, ProgressProjectionService, ProgressService]

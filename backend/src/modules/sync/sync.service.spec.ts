@@ -16,6 +16,7 @@ import { SyncChange } from "./entities/sync-change.entity";
 import { SyncBatchRequestDto, SyncBatchChangesDto, SyncChangeItemDto } from "./dto/sync-batch.dto";
 import { User } from "../users/entities/user.entity";
 import { ProgressQueueService } from "../progress/progress-queue.service";
+import { DomainEventPublisher } from "src/common/events";
 
 type TableKey =
   | "workouts"
@@ -387,9 +388,13 @@ function noProgressQueue(): ProgressQueueService {
   return { enqueueWorkoutsInTransaction: jest.fn().mockResolvedValue(undefined) } as unknown as ProgressQueueService;
 }
 
+function noEventPublisher(): DomainEventPublisher {
+  return { publish: jest.fn().mockResolvedValue(undefined), publishInTransaction: jest.fn().mockResolvedValue(undefined) } as unknown as DomainEventPublisher;
+}
+
 function makeWorkoutService(): WorkoutService {
   const exerciseService = new ExerciseService(exerciseRepo(), {} as unknown as never, {} as unknown as ConfigService);
-  return new WorkoutService(noRepo<Workout>(), noRepo<WorkoutExercise>(), noRepo<Set>(), noRepo<Exercise>(), exerciseService);
+  return new WorkoutService(noRepo<Workout>(), noRepo<WorkoutExercise>(), noRepo<Set>(), noRepo<Exercise>(), exerciseService, noEventPublisher());
 }
 
 function exerciseRepo(): Repository<Exercise> {
