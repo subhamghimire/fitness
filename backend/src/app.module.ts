@@ -19,6 +19,8 @@ import { CoachDashboardModule } from "./modules/coach-dashboard/coach-dashboard.
 import { ProgramModule } from "./modules/program/program.module";
 import { FilesModule } from "./modules/files/files.module";
 import { UserModule } from "./modules/users/user.module";
+import { NotificationsModule } from "./modules/notifications/notifications.module";
+import { MessagingModule } from "./modules/messaging/messaging.module";
 import { HealthController } from "./common/health.controller";
 
 @Module({
@@ -31,6 +33,13 @@ import { HealthController } from "./common/health.controller";
       }
     ]),
     DbModule,
+
+    // NotificationsModule comes before its producers: it provides the
+    // `DomainEventPublisher` token that MessagingModule (below) injects, and the
+    // producer modules that publish events depend on it too. The producers still
+    // only import the `common/events` contract, so this ordering is a wiring
+    // detail and not a source-level dependency.
+    NotificationsModule,
 
     AuthModule,
     SyncModule,
@@ -46,7 +55,8 @@ import { HealthController } from "./common/health.controller";
     CoachDashboardModule,
     ProgramModule,
     FilesModule,
-    UserModule
+    UserModule,
+    MessagingModule
   ],
   controllers: [HealthController],
   providers: [

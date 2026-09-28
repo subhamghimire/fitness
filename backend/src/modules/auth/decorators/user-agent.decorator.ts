@@ -1,11 +1,28 @@
 import { createParamDecorator, ExecutionContext } from "@nestjs/common";
 
 /**
+ * Shape of the object attached to `request.useragent` by the
+ * `express-useragent` middleware that this decorator consumes.
+ */
+export interface UserAgentInfo {
+  browser: string;
+  version: string;
+  os: string;
+  platform: string;
+  source: string;
+  isBot: boolean;
+  isMobile: boolean;
+  isTablet: boolean;
+}
+
+type UserAgentRequest = Request & { useragent?: UserAgentInfo };
+
+/**
  * Decorator to extract parsed user agent info from request
  * Returns a formatted string like "Chrome 120 on Windows 10" or the raw Details object
  */
-export const UserAgent = createParamDecorator((data: "raw" | "formatted" | undefined, ctx: ExecutionContext): string | Record<string, unknown> => {
-  const request = ctx.switchToHttp().getRequest();
+export const UserAgent = createParamDecorator((data: "raw" | "formatted" | undefined, ctx: ExecutionContext): string | UserAgentInfo => {
+  const request = ctx.switchToHttp().getRequest<UserAgentRequest>();
   const ua = request.useragent;
 
   if (!ua) {

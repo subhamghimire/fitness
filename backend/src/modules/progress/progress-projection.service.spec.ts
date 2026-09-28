@@ -1,6 +1,16 @@
 import { DataSource } from "typeorm";
+import { DomainEventPublisher } from "src/common/events";
 import { ProgressProjectionService } from "./progress-projection.service";
 import { ProgressQueueItem } from "./entities/progress-queue-item.entity";
+
+/**
+ * The projection publishes a PR event inside the reprojection transaction. The
+ * queue-path tests below stub the queue entirely, so a recording publisher is
+ * enough: it must accept the call without touching a database.
+ */
+function noEventPublisher(): DomainEventPublisher {
+  return { publish: jest.fn().mockResolvedValue(undefined), publishInTransaction: jest.fn().mockResolvedValue(undefined) } as unknown as DomainEventPublisher;
+}
 
 type Runner = {
   connect: jest.Mock;
@@ -68,7 +78,7 @@ describe("ProgressProjectionService", () => {
 
   it("claims pending rows with SKIP LOCKED, marks them processing and deletes each on success", async () => {
     const { ds, claimRunner, handleRunner, claimUpdateChain } = makeDataSource([claimRow()]);
-    const service = new ProgressProjectionService(ds);
+    const service = new ProgressProjectionService(ds, noEventPublisher());
     jest.spyOn(service, "recomputeWorkout").mockResolvedValue(undefined);
 
     const result = await service.processQueue(25);
@@ -83,7 +93,7 @@ describe("ProgressProjectionService", () => {
 
   it("does nothing when the claim returns no rows", async () => {
     const { ds, claimUpdateChain, createQueryRunner } = makeDataSource([]);
-    const service = new ProgressProjectionService(ds);
+    const service = new ProgressProjectionService(ds, noEventPublisher());
 
     const result = await service.processQueue(25);
 
@@ -94,7 +104,7 @@ describe("ProgressProjectionService", () => {
 
   it("requeues a failed workout to pending and never deletes its queue row", async () => {
     const { ds, handleRunner } = makeDataSource([claimRow({ attemptCount: 1 })]);
-    const service = new ProgressProjectionService(ds);
+    const service = new ProgressProjectionService(ds, noEventPublisher());
     jest.spyOn(service, "recomputeWorkout").mockRejectedValue(new Error("boom"));
 
     const result = await service.processQueue(25);
@@ -107,7 +117,7 @@ describe("ProgressProjectionService", () => {
 
   it("marks a workout permanently failed once attempts are exhausted", async () => {
     const { ds, handleRunner } = makeDataSource([claimRow({ attemptCount: 5 })]);
-    const service = new ProgressProjectionService(ds);
+    const service = new ProgressProjectionService(ds, noEventPublisher());
     jest.spyOn(service, "recomputeWorkout").mockRejectedValue(new Error("boom"));
 
     const result = await service.processQueue(25);
@@ -118,7 +128,7 @@ describe("ProgressProjectionService", () => {
 
   it("harvests stale processing rows before claiming", async () => {
     const { ds, recoveryChain } = makeDataSource([]);
-    const service = new ProgressProjectionService(ds);
+    const service = new ProgressProjectionService(ds, noEventPublisher());
 
     await service.processQueue(25);
 

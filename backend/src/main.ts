@@ -9,6 +9,7 @@ import helmet from "helmet";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { setupSwagger } from "./setup-swagger";
 import { AppExceptionFilter } from "./shared/filters/app-exception.filter";
+import { MessagingIoAdapter } from "./modules/messaging/messaging-io.adapter";
 import { join } from "path";
 
 async function bootstrap() {
@@ -18,6 +19,13 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: false, bodyParser: false });
   app.use(express.json({ limit: "5mb" }));
   app.use(express.urlencoded({ extended: true, limit: "5mb" }));
+
+  // Socket.IO adapter for the messaging gateway. Replaces the default in-process
+  // adapter with the Redis one, so a room broadcast reaches sockets held by any
+  // instance rather than only this one. Falls back to the default adapter with a
+  // logged error if Redis is unreachable, so a Redis outage cannot stop the API
+  // from booting.
+  app.useWebSocketAdapter(new MessagingIoAdapter(app));
 
   app.enableCors({ origin: true, credentials: true });
   app.use(morgan("dev"));

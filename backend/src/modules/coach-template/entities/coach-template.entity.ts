@@ -1,6 +1,6 @@
 import { AbstractEntity } from "src/entities";
 import { Coach } from "src/modules/coach/entities/coach.entity";
-import { Entity, Index, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from "typeorm";
+import { Entity, Index, Column, ManyToOne, JoinColumn } from "typeorm";
 import { CoachTemplateType, DiscountType } from "../enums/coach-template.enum";
 
 @Entity({ name: "coach_templates" })

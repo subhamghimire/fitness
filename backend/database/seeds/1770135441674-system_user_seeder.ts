@@ -1,18 +1,15 @@
-import { DataSource } from 'typeorm';
-import { Seeder, SeederFactoryManager } from 'typeorm-extension';
-import { User } from '../../src/modules/users/entities/user.entity';
-import * as bcrypt from 'bcrypt';
+import { DataSource } from "typeorm";
+import { Seeder, SeederFactoryManager } from "typeorm-extension";
+import { User } from "../../src/modules/users/entities/user.entity";
+import * as bcrypt from "bcrypt";
 
 export class SystemUserSeeder1770135441674 implements Seeder {
   track = false;
 
-  public async run(
-    dataSource: DataSource,
-    factoryManager: SeederFactoryManager
-  ): Promise<any> {
+  public async run(dataSource: DataSource, _factoryManager: SeederFactoryManager): Promise<any> {
     const userRepo = dataSource.getRepository(User);
 
-    const email = 'system@udyamcoach.com';
+    const email = "system@udyamcoach.com";
     const existingUser = await userRepo.findOne({ where: { email } });
 
     if (existingUser) {
@@ -22,15 +19,15 @@ export class SystemUserSeeder1770135441674 implements Seeder {
       return;
     }
 
-    const hashedPassword = await bcrypt.hash('password', 10);
+    const hashedPassword = await bcrypt.hash("password", 10);
 
     const newUser = userRepo.create({
-      name: 'System',
+      name: "System",
       email: email,
-      password: hashedPassword,
+      password: hashedPassword
     });
 
     await userRepo.save(newUser);
-    console.log('Created System user:', newUser.id);
+    console.log("Created System user:", newUser.id);
   }
 }

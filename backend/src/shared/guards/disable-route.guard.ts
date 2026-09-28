@@ -1,9 +1,11 @@
 import { CanActivate, ExecutionContext, Injectable, NotFoundException } from "@nestjs/common";
 
+type DisabledRouteRequest = Request & { method: string; originalUrl: string };
+
 @Injectable()
 export class DisabledRouteGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<DisabledRouteRequest>();
     const method = request.method;
     const url = request.originalUrl;
 
