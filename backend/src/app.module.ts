@@ -21,6 +21,13 @@ import { FilesModule } from "./modules/files/files.module";
 import { UserModule } from "./modules/users/user.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { MessagingModule } from "./modules/messaging/messaging.module";
+import { SocialInfraModule } from "./shared/social/social-infra.module";
+import { FollowsModule } from "./modules/follows/follows.module";
+import { PostsModule } from "./modules/posts/posts.module";
+import { LikesModule } from "./modules/likes/likes.module";
+import { CommentsModule } from "./modules/comments/comments.module";
+import { FeedModule } from "./modules/feed/feed.module";
+import { ReportsModule } from "./modules/reports/reports.module";
 import { HealthController } from "./common/health.controller";
 
 @Module({
@@ -56,7 +63,33 @@ import { HealthController } from "./common/health.controller";
     ProgramModule,
     FilesModule,
     UserModule,
-    MessagingModule
+    MessagingModule,
+
+    // ─── Social platform ────────────────────────────────────────────────────
+    // `SocialInfraModule` is @Global (the Redis graph cache, the cross-instance
+    // write rate limiter, the batch user hydrator, the user presenter), so the
+    // five social modules below get one instance of each rather than five.
+    //
+    // The order of the five is not a dependency declaration — Nest resolves each
+    // module's own `imports` — it is documentation. It reads bottom-up from the
+    // layers, and it is the order to preserve when adding a sixth module:
+    //
+    //     FollowsModule     the graph; owns the rows and the cache invalidation
+    //          ▲
+    //     PostsModule       visibility rules, references, counters, hydration
+    //          ▲
+    //     LikesModule · CommentsModule · FeedModule · ReportsModule
+    //
+    // No social module imports anything below it in that picture, which is what
+    // keeps the graph acyclic and is asserted by the module-level integration
+    // test.
+    SocialInfraModule,
+    FollowsModule,
+    PostsModule,
+    LikesModule,
+    CommentsModule,
+    FeedModule,
+    ReportsModule
   ],
   controllers: [HealthController],
   providers: [
