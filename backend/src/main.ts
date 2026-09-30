@@ -17,6 +17,11 @@ async function bootstrap() {
   // large sync batches are accepted (default express.json limit is 100kb which
   // is too small for a 500-item offline batch).
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: false, bodyParser: false });
+  // Payment webhooks need the exact request bytes for HMAC verification (see
+  // PaymentController.webhook). This path-scoped raw parser runs first and
+  // consumes the stream into a Buffer; the JSON parser below skips requests
+  // that already have a body, so no other route is affected.
+  app.use("/api/v1/payments/webhooks", express.raw({ type: "application/json", limit: "5mb" }));
   app.use(express.json({ limit: "5mb" }));
   app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 

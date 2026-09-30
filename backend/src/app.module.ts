@@ -28,6 +28,7 @@ import { LikesModule } from "./modules/likes/likes.module";
 import { CommentsModule } from "./modules/comments/comments.module";
 import { FeedModule } from "./modules/feed/feed.module";
 import { ReportsModule } from "./modules/reports/reports.module";
+import { MarketplaceModule } from "./modules/marketplace/marketplace.module";
 import { HealthController } from "./common/health.controller";
 
 @Module({
@@ -89,7 +90,12 @@ import { HealthController } from "./common/health.controller";
     LikesModule,
     CommentsModule,
     FeedModule,
-    ReportsModule
+    ReportsModule,
+
+    // ─── Coach marketplace & monetization ───────────────────────────────────
+    // Bounded context: Product → Order → Payment → Entitlement → Payout, with
+    // an append-only audit log. See MarketplaceModule for the dependency shape.
+    MarketplaceModule
   ],
   controllers: [HealthController],
   providers: [

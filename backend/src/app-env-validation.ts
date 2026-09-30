@@ -121,6 +121,23 @@ class EnvironmentVariables {
   @Type(() => Number)
   @IsInt()
   NOTIFICATION_EVENT_JOB_ATTEMPTS?: number;
+
+  // ── Marketplace / payments (all optional) ─────────────────────────────────
+  /** Payment provider implementation. Only "mock" is implemented. */
+  @IsOptional()
+  @IsString()
+  PAYMENT_PROVIDER?: string;
+
+  /** HMAC secret providers sign webhooks with. Set a strong value in production. */
+  @IsOptional()
+  @IsString()
+  PAYMENT_WEBHOOK_SECRET?: string;
+
+  /** Platform fee in basis points (1000 = 10%). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  MARKETPLACE_PLATFORM_FEE_BPS?: number;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {
