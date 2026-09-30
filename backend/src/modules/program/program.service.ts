@@ -78,6 +78,21 @@ export class ProgramService {
     return this.toResponseDto(program);
   }
 
+  /**
+   * Unscoped detail load for callers that already authorized the read through
+   * another mechanism — currently marketplace entitlements (a buyer reading a
+   * program they purchased). Deliberately performs NO actor check; the caller
+   * owns authorization and must say so at its call site.
+   */
+  async getDetailById(programId: string): Promise<ProgramResponseDto> {
+    const program = await this.programRepo.findOne({
+      where: { id: programId, isDeleted: false },
+      relations: { days: { workouts: true } }
+    });
+    if (!program || !program.isActive) throw new NotFoundException("Program not found");
+    return this.toResponseDto(program);
+  }
+
   async update(user: User, id: string, dto: UpdateProgramDto): Promise<ProgramResponseDto> {
     const coach = await this.requireCoach(user);
     const program = await this.programRepo.findOne({
